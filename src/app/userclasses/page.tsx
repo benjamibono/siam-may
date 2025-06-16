@@ -9,21 +9,63 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { ArrowLeft, BookOpen, Calendar, Users } from "lucide-react";
 import type { Tables } from "@/lib/supabase";
+import { getNextClassDay } from "@/lib/class-schedule";
+import {
+  canEnrollInClasses,
+  getEnrollmentStatusMessage,
+  canEnrollInClassType,
+  getClassRestrictionMessage,
+  getCurrentMonthYear,
+} from "@/lib/payment-logic";
 
 interface ClassWithEnrollment extends Tables<"classes"> {
   is_enrolled: boolean;
+  enrollment_count: number;
 }
+
+// Función para manejar inscripciones con validaciones
 
 export default function UserClassesPage() {
   const { user, profile, isLoading } = useProfile();
   const [classes, setClasses] = useState<ClassWithEnrollment[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
+  const [lastPayment, setLastPayment] = useState<{
+    concept: string;
+    payment_date: string;
+  } | null>(null);
 
   useEffect(() => {
     if (user) {
       fetchClasses();
+      fetchLastPayment();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  const fetchLastPayment = async () => {
+    if (!user) return;
+
+    try {
+      const { month, year } = getCurrentMonthYear();
+      const { data: payments, error } = await supabase
+        .from("payments")
+        .select("concept, payment_date")
+        .eq("user_id", user.id)
+        .gte("payment_date", `${year}-${month.toString().padStart(2, "0")}-01`)
+        .lt(
+          "payment_date",
+          `${year}-${(month + 1).toString().padStart(2, "0")}-01`
+        )
+        .order("payment_date", { ascending: false })
+        .limit(1);
+
+      if (error) throw error;
+
+      setLastPayment(payments && payments.length > 0 ? payments[0] : null);
+    } catch (error) {
+      console.error("Error fetching last payment:", error);
+    }
+  };
 
   const fetchClasses = async () => {
     if (!user) return;
@@ -46,15 +88,30 @@ export default function UserClassesPage() {
 
       const enrolledClassIds = enrollments?.map((e) => e.class_id) || [];
 
-      // Combinar la información
-      const classesWithEnrollment: ClassWithEnrollment[] =
-        allClasses?.map((cls) => ({
-          ...cls,
-          is_enrolled: enrolledClassIds.includes(cls.id),
-        })) || [];
+      // Obtener el conteo de inscripciones para cada clase
+      const classesWithEnrollment: ClassWithEnrollment[] = [];
+
+      if (allClasses) {
+        for (const cls of allClasses) {
+          const { count, error: countError } = await supabase
+            .from("class_enrollments")
+            .select("*", { count: "exact", head: true })
+            .eq("class_id", cls.id);
+
+          if (countError) {
+            console.error("Error counting enrollments:", countError);
+          }
+
+          classesWithEnrollment.push({
+            ...cls,
+            is_enrolled: enrolledClassIds.includes(cls.id),
+            enrollment_count: count || 0,
+          });
+        }
+      }
 
       setClasses(classesWithEnrollment);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error fetching classes:", error);
       toast.error("Error al cargar las clases");
     } finally {
@@ -62,12 +119,16 @@ export default function UserClassesPage() {
     }
   };
 
-  const handleEnrollment = async (classId: string, isEnrolled: boolean) => {
-    if (!user) return;
+  const handleEnrollment = async (
+    classId: string,
+    isEnrolled: boolean,
+    className: string
+  ) => {
+    if (!user || !profile) return;
 
     try {
       if (isEnrolled) {
-        // Desinscribirse
+        // Desinscribirse (siempre permitido)
         const { error } = await supabase
           .from("class_enrollments")
           .delete()
@@ -77,6 +138,23 @@ export default function UserClassesPage() {
         if (error) throw error;
         toast.success("Te has desinscrito de la clase");
       } else {
+        // Verificar si puede inscribirse según el estado
+        if (!canEnrollInClasses(profile.status)) {
+          const message = getEnrollmentStatusMessage(profile.status);
+          toast.error(message);
+          return;
+        }
+
+        // Verificar si puede inscribirse según el tipo de pago
+        if (!canEnrollInClassType(className, lastPayment?.concept || null)) {
+          const message = getClassRestrictionMessage(
+            className,
+            lastPayment?.concept || null
+          );
+          toast.error(message);
+          return;
+        }
+
         // Inscribirse
         const { error } = await supabase.from("class_enrollments").insert({
           user_id: user.id,
@@ -89,7 +167,7 @@ export default function UserClassesPage() {
 
       // Actualizar la lista
       fetchClasses();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error with enrollment:", error);
       toast.error("Error al procesar la inscripción");
     }
@@ -122,7 +200,6 @@ export default function UserClassesPage() {
           <Link href="/">
             <Button variant="outline" size="sm" className="mb-4">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Volver al inicio
             </Button>
           </Link>
           <h1 className="text-3xl font-bold text-gray-900">Mis Clases</h1>
@@ -153,21 +230,21 @@ export default function UserClassesPage() {
                         {cls.name}
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3">
+                    <CardContent className="flex flex-col gap-3">
                       {cls.description && (
                         <p className="text-gray-600">{cls.description}</p>
                       )}
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Calendar className="h-4 w-4" />
-                        {cls.schedule} - {cls.frequency}
+                        {getNextClassDay(cls.schedule)}
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Users className="h-4 w-4" />
-                        {cls.current_enrollments}/{cls.capacity} inscritos
+                        {cls.enrollment_count}/{cls.capacity} inscritos
                       </div>
                       <Button
                         variant="outline"
-                        onClick={() => handleEnrollment(cls.id, true)}
+                        onClick={() => handleEnrollment(cls.id, true, cls.name)}
                         className="w-full"
                       >
                         Desinscribirse
@@ -202,24 +279,26 @@ export default function UserClassesPage() {
                         {cls.name}
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3">
+                    <CardContent className="flex flex-col gap-3">
                       {cls.description && (
                         <p className="text-gray-600">{cls.description}</p>
                       )}
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Calendar className="h-4 w-4" />
-                        {cls.schedule} - {cls.frequency}
+                        {getNextClassDay(cls.schedule)}
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Users className="h-4 w-4" />
-                        {cls.current_enrollments}/{cls.capacity} inscritos
+                        {cls.enrollment_count}/{cls.capacity} inscritos
                       </div>
                       <Button
-                        onClick={() => handleEnrollment(cls.id, false)}
+                        onClick={() =>
+                          handleEnrollment(cls.id, false, cls.name)
+                        }
                         className="w-full"
-                        disabled={cls.current_enrollments >= cls.capacity}
+                        disabled={cls.enrollment_count >= cls.capacity}
                       >
-                        {cls.current_enrollments >= cls.capacity
+                        {cls.enrollment_count >= cls.capacity
                           ? "Clase Llena"
                           : "Inscribirse"}
                       </Button>

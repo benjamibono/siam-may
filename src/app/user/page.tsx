@@ -7,18 +7,33 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Key, Mail } from "lucide-react";
 import type { Tables } from "@/lib/supabase";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function UserProfilePage() {
   const { user, profile, isLoading } = useProfile();
   const [isEditing, setIsEditing] = useState(false);
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     first_surname: "",
     second_surname: "",
     dni: "",
     phone: "",
+  });
+  const [passwordData, setPasswordData] = useState({
+    password: "",
+    confirmPassword: "",
+  });
+  const [emailData, setEmailData] = useState({
+    email: "",
   });
 
   useEffect(() => {
@@ -57,6 +72,55 @@ export default function UserProfilePage() {
     }
   };
 
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    if (passwordData.password !== passwordData.confirmPassword) {
+      toast.error("Las contraseñas no coinciden");
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: passwordData.password,
+      });
+
+      if (error) throw error;
+      toast.success("Contraseña actualizada correctamente");
+      setIsPasswordDialogOpen(false);
+      setPasswordData({ password: "", confirmPassword: "" });
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Error al actualizar la contraseña");
+      }
+    }
+  };
+
+  const handleEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        email: emailData.email,
+      });
+
+      if (error) throw error;
+      toast.success("Email de verificación enviado a la nueva dirección");
+      setIsEmailDialogOpen(false);
+      setEmailData({ email: "" });
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Error al actualizar el email");
+      }
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -77,23 +141,22 @@ export default function UserProfilePage() {
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-2xl mx-auto px-4">
         {/* Header */}
-        <div className="mb-6">
+        <div className="flex flex-row justify-evenly mb-2">
           <Link href="/">
             <Button variant="outline" size="sm" className="mb-4">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Volver al inicio
+              <ArrowLeft className="h-4 w-4" />
+              Volver
             </Button>
           </Link>
           <h1 className="text-3xl font-bold text-gray-900">Mi Perfil</h1>
         </div>
-
         <Card>
           <CardHeader>
             <CardTitle>Información Personal</CardTitle>
           </CardHeader>
           <CardContent>
             {!isEditing ? (
-              <div className="space-y-4">
+              <div className="flex flex-col gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Email
@@ -148,24 +211,32 @@ export default function UserProfilePage() {
                     {profile?.role === "admin"
                       ? "Administrador"
                       : profile?.role === "staff"
-                      ? "Personal"
+                      ? "Entrenador"
                       : "Usuario"}
                   </span>
                 </div>
-                <Button onClick={() => setIsEditing(true)}>
-                  Editar Perfil
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => setIsEditing(true)}>
+                    Editar datos
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsEmailDialogOpen(true)}
+                  >
+                    <Mail className="h-4 w-4 mr-2" />
+                    Cambiar email
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsPasswordDialogOpen(true)}
+                  >
+                    <Key className="h-4 w-4 mr-2" />
+                    Cambiar contraseña
+                  </Button>
+                </div>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Email
-                  </label>
-                  <p className="text-gray-900 text-sm">
-                    {user.email} (no editable)
-                  </p>
-                </div>
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div>
                   <label
                     htmlFor="name"
@@ -263,7 +334,7 @@ export default function UserProfilePage() {
                   />
                 </div>
                 <div className="flex gap-2">
-                  <Button type="submit">Guardar Cambios</Button>
+                  <Button type="submit">Guardar cambios</Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -276,6 +347,116 @@ export default function UserProfilePage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Diálogo de cambio de contraseña */}
+        <Dialog
+          open={isPasswordDialogOpen}
+          onOpenChange={setIsPasswordDialogOpen}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Cambiar contraseña</DialogTitle>
+            </DialogHeader>
+            <form
+              onSubmit={handlePasswordSubmit}
+              className="flex flex-col gap-4"
+            >
+              <div>
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Nueva contraseña
+                </label>
+                <input
+                  type="password"
+                  id="password"
+                  value={passwordData.password}
+                  onChange={(e) =>
+                    setPasswordData({
+                      ...passwordData,
+                      password: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="confirmPassword"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Confirmar contraseña
+                </label>
+                <input
+                  type="password"
+                  id="confirmPassword"
+                  value={passwordData.confirmPassword}
+                  onChange={(e) =>
+                    setPasswordData({
+                      ...passwordData,
+                      confirmPassword: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="submit">Guardar</Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsPasswordDialogOpen(false)}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Diálogo de cambio de email */}
+        <Dialog open={isEmailDialogOpen} onOpenChange={setIsEmailDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Cambiar email</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleEmailSubmit} className="flex flex-col gap-4">
+              <div>
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Nuevo email
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  value={emailData.email}
+                  onChange={(e) =>
+                    setEmailData({ ...emailData, email: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="submit">Enviar verificación</Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsEmailDialogOpen(false)}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

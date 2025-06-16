@@ -17,20 +17,52 @@ import {
   Trash,
 } from "lucide-react";
 import type { Tables } from "@/lib/supabase";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+interface ClassWithEnrollments extends Tables<"classes"> {
+  enrolled_users: {
+    name: string;
+    first_surname: string;
+    second_surname: string | null;
+  }[];
+  enrollment_count: number;
+}
+
+// Helper function to format schedule for display
+const formatClassDate = (schedule: string) => {
+  if (!schedule) return "";
+
+  // Extract days and time from schedule (assuming format like "Lunes, Miércoles, Viernes 19:00-20:00")
+  const timeRegex = /\d{1,2}:\d{2}-\d{1,2}:\d{2}/;
+  const timeMatch = schedule.match(timeRegex);
+  const time = timeMatch ? timeMatch[0] : "";
+
+  // Get the days part (everything before the time)
+  const daysText = schedule.replace(timeRegex, "").trim().replace(/,$/, "");
+
+  // For admin/staff view, just show "Lunes, Miércoles y Viernes 19:00-20:00"
+  const formattedDays = daysText.replace(/,([^,]*)$/, " y$1");
+  return `${formattedDays} ${time}`;
+};
 
 export default function ClassManagementPage() {
-  const { user, profile, isLoading, isAdmin, isStaff } = useProfile();
-  const [classes, setClasses] = useState<Tables<"classes">[]>([]);
-  const [loadingClasses, setLoadingClasses] = useState(true);
+  const { user, isLoading, isAdmin, isStaff } = useProfile();
+  const [classes, setClasses] = useState<ClassWithEnrollments[]>([]);
   const [isCreating, setIsCreating] = useState(false);
-  const [editingClass, setEditingClass] = useState<Tables<"classes"> | null>(
+  const [editingClass, setEditingClass] = useState<ClassWithEnrollments | null>(
     null
   );
+  const [selectedClassForEnrollments, setSelectedClassForEnrollments] =
+    useState<ClassWithEnrollments | null>(null);
   const [formData, setFormData] = useState({
     name: "Muay Thai" as "Muay Thai" | "MMA",
     description: "",
     schedule: "",
-    frequency: "",
     capacity: 20,
   });
 
@@ -84,18 +116,33 @@ export default function ClassManagementPage() {
 
   const fetchClasses = async () => {
     try {
-      const { data, error } = await supabase
-        .from("classes")
-        .select("*")
-        .order("name");
+      // Obtener el token de sesión
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (error) throw error;
-      setClasses(data || []);
-    } catch (error: any) {
+      if (!session?.access_token) {
+        throw new Error("No hay sesión activa");
+      }
+
+      const response = await fetch("/api/admin/classes", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Error al obtener las clases");
+      }
+
+      const classesWithEnrollments = await response.json();
+      console.log("Clases obtenidas:", classesWithEnrollments);
+
+      setClasses(classesWithEnrollments);
+    } catch (error) {
       console.error("Error fetching classes:", error);
       toast.error("Error al cargar las clases");
-    } finally {
-      setLoadingClasses(false);
     }
   };
 
@@ -120,12 +167,10 @@ export default function ClassManagementPage() {
 
     // Crear el horario formateado a partir de los selectores
     const schedule = formatSchedule(selectedDays, startTime, endTime);
-    const frequency = `${selectedDays.length} veces por semana`;
 
     const dataToSave = {
       ...formData,
       schedule,
-      frequency,
     };
 
     try {
@@ -145,7 +190,6 @@ export default function ClassManagementPage() {
         // Crear nueva clase
         const { error } = await supabase.from("classes").insert({
           ...dataToSave,
-          current_enrollments: 0,
         });
 
         if (error) throw error;
@@ -157,7 +201,6 @@ export default function ClassManagementPage() {
         name: "Muay Thai",
         description: "",
         schedule: "",
-        frequency: "",
         capacity: 20,
       });
       setSelectedDays([]);
@@ -166,13 +209,13 @@ export default function ClassManagementPage() {
       setIsCreating(false);
       setEditingClass(null);
       fetchClasses();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error saving class:", error);
       toast.error("Error al guardar la clase");
     }
   };
 
-  const handleEdit = (classItem: Tables<"classes">) => {
+  const handleEdit = (classItem: ClassWithEnrollments) => {
     // Parsear el horario existente
     const parsed = parseSchedule(classItem.schedule);
 
@@ -180,7 +223,6 @@ export default function ClassManagementPage() {
       name: classItem.name,
       description: classItem.description || "",
       schedule: classItem.schedule,
-      frequency: classItem.frequency,
       capacity: classItem.capacity,
     });
 
@@ -211,7 +253,7 @@ export default function ClassManagementPage() {
       if (error) throw error;
       toast.success("Clase eliminada correctamente");
       fetchClasses();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error deleting class:", error);
       toast.error("Error al eliminar la clase");
     }
@@ -222,7 +264,6 @@ export default function ClassManagementPage() {
       name: "Muay Thai",
       description: "",
       schedule: "",
-      frequency: "",
       capacity: 20,
     });
     setSelectedDays([]);
@@ -232,7 +273,7 @@ export default function ClassManagementPage() {
     setEditingClass(null);
   };
 
-  if (isLoading || loadingClasses) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div>Cargando...</div>
@@ -240,7 +281,15 @@ export default function ClassManagementPage() {
     );
   }
 
-  if (!user || (!isAdmin && !isStaff)) {
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div>Debes iniciar sesión para acceder a esta página</div>
+      </div>
+    );
+  }
+
+  if (!isAdmin && !isStaff) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div>No tienes permisos para acceder a esta página</div>
@@ -253,26 +302,23 @@ export default function ClassManagementPage() {
       <div className="max-w-6xl mx-auto px-4">
         {/* Header */}
         <div className="mb-6">
-          <Link href="/">
-            <Button variant="outline" size="sm" className="mb-4">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Volver al inicio
-            </Button>
-          </Link>
-          <div className="flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-gray-900">
-              Gestión de Clases
-            </h1>
-            {!isCreating && (
-              <Button onClick={() => setIsCreating(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Nueva Clase
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">
+            Gestión de Clases
+          </h1>
+          <div className="flex items-center justify-between">
+            <Link href="/">
+              <Button variant="outline">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Volver
               </Button>
-            )}
+            </Link>
+            <Button onClick={() => setIsCreating(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nueva Clase
+            </Button>
           </div>
         </div>
 
-        {/* Formulario de creación/edición */}
         {isCreating && (
           <Card className="mb-6">
             <CardHeader>
@@ -281,7 +327,7 @@ export default function ClassManagementPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div>
                   <label
                     htmlFor="name"
@@ -325,36 +371,29 @@ export default function ClassManagementPage() {
                   />
                 </div>
 
-                {/* Selector de días de la semana */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Días de la semana
                   </label>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-7">
                     {daysOfWeek.map((day) => (
-                      <label
+                      <button
                         key={day.value}
-                        className="flex items-center space-x-2 p-2 border rounded-md hover:bg-gray-50"
+                        type="button"
+                        onClick={() => handleDayToggle(day.value)}
+                        className={`px-3 py-2 text-sm border rounded-md transition-colors ${
+                          selectedDays.includes(day.value)
+                            ? "bg-blue-500 text-white border-blue-500"
+                            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                        }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={selectedDays.includes(day.value)}
-                          onChange={() => handleDayToggle(day.value)}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="text-sm">{day.label}</span>
-                      </label>
+                        {day.label}
+                      </button>
                     ))}
                   </div>
-                  {selectedDays.length === 0 && (
-                    <p className="text-red-500 text-sm mt-1">
-                      Selecciona al menos un día
-                    </p>
-                  )}
                 </div>
 
-                {/* Selectores de hora */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label
                       htmlFor="startTime"
@@ -371,6 +410,7 @@ export default function ClassManagementPage() {
                       required
                     />
                   </div>
+
                   <div>
                     <label
                       htmlFor="endTime"
@@ -389,16 +429,11 @@ export default function ClassManagementPage() {
                   </div>
                 </div>
 
-                {/* Preview del horario */}
                 {selectedDays.length > 0 && startTime && endTime && (
                   <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
                     <p className="text-sm text-blue-800">
                       <strong>Horario:</strong>{" "}
                       {formatSchedule(selectedDays, startTime, endTime)}
-                    </p>
-                    <p className="text-sm text-blue-600">
-                      <strong>Frecuencia:</strong> {selectedDays.length} veces
-                      por semana
                     </p>
                   </div>
                 )}
@@ -450,17 +485,22 @@ export default function ClassManagementPage() {
                   {classItem.name}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="flex flex-col gap-3">
                 {classItem.description && (
                   <p className="text-gray-600">{classItem.description}</p>
                 )}
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Calendar className="h-4 w-4" />
-                  {classItem.schedule} - {classItem.frequency}
+                  {formatClassDate(classItem.schedule)}
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Users className="h-4 w-4" />
-                  {classItem.current_enrollments}/{classItem.capacity} inscritos
+                  <button
+                    onClick={() => setSelectedClassForEnrollments(classItem)}
+                    className="hover:underline"
+                  >
+                    {classItem.enrollment_count}/{classItem.capacity} inscritos
+                  </button>
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -494,6 +534,34 @@ export default function ClassManagementPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Diálogo de participantes */}
+        <Dialog
+          open={!!selectedClassForEnrollments}
+          onOpenChange={() => setSelectedClassForEnrollments(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                Participantes de {selectedClassForEnrollments?.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-2">
+              {selectedClassForEnrollments?.enrolled_users.map(
+                (user, index) => (
+                  <div key={index} className="p-2 border rounded">
+                    {user.name} {user.first_surname} {user.second_surname || ""}
+                  </div>
+                )
+              )}
+              {selectedClassForEnrollments?.enrolled_users.length === 0 && (
+                <p className="text-gray-500 text-center py-4">
+                  No hay participantes inscritos aún.
+                </p>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

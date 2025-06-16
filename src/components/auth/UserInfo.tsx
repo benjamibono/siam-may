@@ -50,15 +50,14 @@ export function UserInfo() {
     <div className="bg-white border-b shadow-sm p-4">
       <div className="max-w-7xl mx-auto flex justify-between items-center">
         <div>
-          <p className="text-sm text-gray-600">Sesión iniciada como:</p>
-          <p className="font-medium">{profile?.name || user.email}</p>
-          {profile?.role && (
+          <p className="font-medium">{profile?.name + " " + profile?.first_surname + " " + profile?.second_surname || user.email}</p>
+          {profile?.role !== "user" && (
             <span className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
               {profile.role === "admin"
                 ? "Administrador"
                 : profile.role === "staff"
-                ? "Personal"
-                : "Usuario"}
+                ? "Entrenador"
+                : ""}
             </span>
           )}
         </div>

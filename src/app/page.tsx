@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useProfile } from "@/hooks/useProfile";
 import { AuthForm } from "@/components/auth/AuthForm";
 import { UserInfo } from "@/components/auth/UserInfo";
+import { UserClassesContent } from "@/components/UserClassesContent";
 
 export default function HomePage() {
   const { profile, isLoading, isAdmin, isStaff, user } = useProfile();
@@ -14,7 +15,7 @@ export default function HomePage() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div>Cargando...</div>
+        <div className="text-lg">Cargando...</div>
       </div>
     );
   }
@@ -28,108 +29,191 @@ export default function HomePage() {
           <UserInfo />
           {/* Dashboard principal */}
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-900">
+            {profile?.role !== "admin" && (
+            <div className="mb-12">
+              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">
                 Bienvenido a Siam May
               </h1>
-              <p className="text-gray-600">Gimnasio Muay Thai & MMA</p>
+              <p className="text-lg text-gray-600">Gimnasio Muay Thai & MMA</p>
             </div>
+            )}
+            {/* Para usuarios normales */}
+            {profile?.role !== "admin" && profile?.role !== "staff" && (
+              <div className="space-y-12">
+                {/* Contenido de clases directamente */}
+                <UserClassesContent />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Navegación para usuarios */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Mis Clases</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Ve tus clases inscritas y horarios
-                  </p>
-                  <Link href="/userclasses">
-                    <Button className="w-full">
-                      <BookOpen className="h-4 w-4 mr-2" />
-                      Ver Mis Clases
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
+                {/* Card de Mi Perfil */}
+                <div className="max-w-4xl mx-auto">
+                  <h2 className="text-2xl font-semibold text-gray-900 mb-6">
+                    Mi Cuenta
+                  </h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <Card className="hover:shadow-lg transition-shadow">
+                      <CardHeader className="pb-4">
+                        <CardTitle className="flex items-center gap-2">
+                          <Users className="h-5 w-5" />
+                          Mi Perfil
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-600 mb-6">
+                          Gestiona tu información personal
+                        </p>
+                        <Link href="/user">
+                          <Button className="w-full">Ver Perfil</Button>
+                        </Link>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </div>
+            )}
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Mi Perfil</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Gestiona tu información personal
-                  </p>
-                  <Link href="/user">
-                    <Button className="w-full">
-                      <Users className="h-4 w-4 mr-2" />
-                      Ver Perfil
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
+            {/* Para staff */}
+            {isStaff && !isAdmin && (
+              <div className="space-y-12">
+                {/* Contenido de clases directamente */}
+                <UserClassesContent />
 
-              {/* Navegación para staff y admin */}
-              {(isAdmin || isStaff) && (
-                <>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Gestión de Clases</CardTitle>
+                {/* Cards de gestión y perfil */}
+                <div className="max-w-6xl mx-auto">
+                  <h2 className="text-2xl font-semibold text-gray-900 mb-6">
+                    Herramientas de Gestión
+                  </h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <Card className="hover:shadow-lg transition-shadow">
+                      <CardHeader className="pb-4">
+                        <CardTitle className="flex items-center gap-2">
+                          <BookOpen className="h-5 w-5" />
+                          Gestión de Clases
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-600 mb-6">
+                          Administra las clases del gimnasio
+                        </p>
+                        <Link href="/classmanagement">
+                          <Button className="w-full">Gestionar Clases</Button>
+                        </Link>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="hover:shadow-lg transition-shadow">
+                      <CardHeader className="pb-4">
+                        <CardTitle className="flex items-center gap-2">
+                          <CreditCard className="h-5 w-5" />
+                          Gestión de Pagos
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-600 mb-6">
+                          Administra los pagos y cuotas
+                        </p>
+                        <Link href="/payments">
+                          <Button className="w-full">Gestionar Pagos</Button>
+                        </Link>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="hover:shadow-lg transition-shadow">
+                      <CardHeader className="pb-4">
+                        <CardTitle className="flex items-center gap-2">
+                          <Users className="h-5 w-5" />
+                          Mi Perfil
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-600 mb-6">
+                          Gestiona tu información personal
+                        </p>
+                        <Link href="/user">
+                          <Button className="w-full">Ver Perfil</Button>
+                        </Link>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Para admin */}
+            {isAdmin && (
+              <div className="max-w-6xl mx-auto">
+                <h2 className="text-2xl font-semibold text-gray-900 mb-6">
+                  Panel de Administración
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  <Card className="hover:shadow-lg transition-shadow">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="flex items-center gap-2">
+                        <Users className="h-5 w-5" />
+                        Gestión de Usuarios
+                      </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-sm text-gray-600 mb-4">
+                      <p className="text-sm text-gray-600 mb-6">
+                        Administra todos los usuarios
+                      </p>
+                      <Link href="/users">
+                        <Button className="w-full">Gestionar Usuarios</Button>
+                      </Link>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="hover:shadow-lg transition-shadow">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="flex items-center gap-2">
+                        <BookOpen className="h-5 w-5" />
+                        Gestión de Clases
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-gray-600 mb-6">
                         Administra las clases del gimnasio
                       </p>
                       <Link href="/classmanagement">
-                        <Button className="w-full">
-                          <BookOpen className="h-4 w-4 mr-2" />
-                          Gestionar Clases
-                        </Button>
+                        <Button className="w-full">Gestionar Clases</Button>
                       </Link>
                     </CardContent>
                   </Card>
 
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Gestión de Pagos</CardTitle>
+                  <Card className="hover:shadow-lg transition-shadow">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="flex items-center gap-2">
+                        <CreditCard className="h-5 w-5" />
+                        Gestión de Pagos
+                      </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-sm text-gray-600 mb-4">
+                      <p className="text-sm text-gray-600 mb-6">
                         Administra los pagos y cuotas
                       </p>
                       <Link href="/payments">
-                        <Button className="w-full">
-                          <CreditCard className="h-4 w-4 mr-2" />
-                          Gestionar Pagos
-                        </Button>
+                        <Button className="w-full">Gestionar Pagos</Button>
                       </Link>
                     </CardContent>
                   </Card>
-                </>
-              )}
 
-              {/* Navegación solo para admin */}
-              {isAdmin && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Gestión de Usuarios</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-gray-600 mb-4">
-                      Administra todos los usuarios
-                    </p>
-                    <Link href="/users">
-                      <Button className="w-full">
-                        <Users className="h-4 w-4 mr-2" />
-                        Gestionar Usuarios
-                      </Button>
-                    </Link>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
+                  <Card className="hover:shadow-lg transition-shadow">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="flex items-center gap-2">
+                        <Users className="h-5 w-5" />
+                        Mi Perfil
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-gray-600 mb-6">
+                        Gestiona tu información personal
+                      </p>
+                      <Link href="/user">
+                        <Button className="w-full">Ver Perfil</Button>
+                      </Link>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}

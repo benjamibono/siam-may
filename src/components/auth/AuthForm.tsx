@@ -30,11 +30,27 @@ export function AuthForm() {
 
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
+
+        // Verificar si la cuenta está suspendida
+        if (data.user) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("status")
+            .eq("id", data.user.id)
+            .single();
+
+          if (profile?.status === "suspended") {
+            await supabase.auth.signOut();
+            toast.error("Cuenta suspendida. Contacte con el administrador.");
+            return;
+          }
+        }
+
         toast.success("¡Bienvenido!");
       } else {
         // Validar campos requeridos para registro
@@ -79,8 +95,12 @@ export function AuthForm() {
           }
         }
       }
-    } catch (error: any) {
-      toast.error(error.message || "Error de autenticación");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Error de autenticación");
+      }
     } finally {
       setLoading(false);
     }
@@ -95,7 +115,7 @@ export function AuthForm() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleAuth} className="space-y-4">
+          <form onSubmit={handleAuth} className="flex flex-col gap-4">
             <div>
               <label htmlFor="email" className="block text-sm font-medium mb-1">
                 Email *

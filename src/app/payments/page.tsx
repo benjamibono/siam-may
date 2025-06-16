@@ -9,6 +9,24 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { ArrowLeft, CreditCard, Plus, Edit, Trash, Search } from "lucide-react";
 import type { Tables } from "@/lib/supabase";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+
+interface UserOption {
+  id: string;
+  label: string;
+  email: string;
+}
 
 export default function PaymentsPage() {
   const { user, profile, isLoading, isAdmin, isStaff } = useProfile();
@@ -26,16 +44,46 @@ export default function PaymentsPage() {
       | "Cuota mensual MMA"
       | "Cuota mensual Muay Thai + MMA"
       | "Matrícula",
-    amount: 0,
+    amount: 30,
     payment_method: "Efectivo" as "Efectivo" | "Bizum" | "Transferencia",
     payment_date: new Date().toISOString().split("T")[0],
   });
 
+  const [users, setUsers] = useState<UserOption[]>([]);
+  const [openUserSearch, setOpenUserSearch] = useState(false);
+  const [userSearchTerm, setUserSearchTerm] = useState("");
+
   useEffect(() => {
     if (user && (isAdmin || isStaff)) {
       fetchPayments();
+      fetchUsers();
     }
   }, [user, isAdmin, isStaff]);
+
+  const fetchUsers = async () => {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) {
+        throw new Error("No hay sesión activa");
+      }
+
+      const response = await fetch("/api/payments/users", {
+        headers: {
+          Authorization: `Bearer ${session.session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Error al obtener usuarios");
+      }
+
+      const { users } = await response.json();
+      setUsers(users);
+    } catch (error: any) {
+      console.error("Error fetching users:", error);
+      toast.error("Error al cargar los usuarios");
+    }
+  };
 
   const fetchPayments = async () => {
     try {
@@ -56,6 +104,11 @@ export default function PaymentsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!formData.user_id || !formData.full_name) {
+      toast.error("Debes seleccionar un usuario");
+      return;
+    }
 
     try {
       if (editingPayment) {
@@ -78,12 +131,45 @@ export default function PaymentsPage() {
         toast.success("Pago registrado correctamente");
       }
 
+      // Procesar automáticamente el estado del usuario después de registrar un pago
+      try {
+        const { data: session } = await supabase.auth.getSession();
+        if (session.session) {
+          const response = await fetch(
+            `/api/payments/process-status?userId=${formData.user_id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${session.session.access_token}`,
+              },
+            }
+          );
+
+          if (response.ok) {
+            const result = await response.json();
+            if (result.statusChanged) {
+              toast.success(
+                `Estado del usuario actualizado a: ${
+                  result.newStatus === "active"
+                    ? "Activo"
+                    : result.newStatus === "pending"
+                    ? "Pendiente"
+                    : "Suspendido"
+                }`
+              );
+            }
+          }
+        }
+      } catch (statusError) {
+        console.error("Error updating user status:", statusError);
+        // No mostrar error al usuario ya que el pago se registró correctamente
+      }
+
       // Reset form
       setFormData({
         user_id: "",
         full_name: "",
         concept: "Cuota mensual Muay Thai",
-        amount: 0,
+        amount: 30,
         payment_method: "Efectivo",
         payment_date: new Date().toISOString().split("T")[0],
       });
@@ -100,9 +186,9 @@ export default function PaymentsPage() {
     setFormData({
       user_id: payment.user_id,
       full_name: payment.full_name,
-      concept: payment.concept,
+      concept: payment.concept as typeof formData.concept,
       amount: payment.amount,
-      payment_method: payment.payment_method,
+      payment_method: payment.payment_method as typeof formData.payment_method,
       payment_date: payment.payment_date,
     });
     setEditingPayment(payment);
@@ -138,12 +224,47 @@ export default function PaymentsPage() {
       user_id: "",
       full_name: "",
       concept: "Cuota mensual Muay Thai",
-      amount: 0,
+      amount: 30,
       payment_method: "Efectivo",
       payment_date: new Date().toISOString().split("T")[0],
     });
     setIsCreating(false);
     setEditingPayment(null);
+  };
+
+  const processAllUserStatuses = async () => {
+    if (
+      !confirm(
+        "¿Estás seguro de que quieres procesar los estados de todos los usuarios? Esta acción verificará los pagos y actualizará estados automáticamente."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) {
+        toast.error("No hay sesión activa");
+        return;
+      }
+
+      const response = await fetch("/api/payments/process-status", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Error al procesar estados");
+      }
+
+      const result = await response.json();
+      toast.success(result.message);
+    } catch (error: any) {
+      console.error("Error processing user statuses:", error);
+      toast.error("Error al procesar estados de usuarios");
+    }
   };
 
   const filteredPayments = payments.filter(
@@ -155,17 +276,21 @@ export default function PaymentsPage() {
   const getConceptAmount = (concept: string) => {
     switch (concept) {
       case "Cuota mensual Muay Thai":
-        return 50;
+        return 30;
       case "Cuota mensual MMA":
-        return 60;
+        return 30;
       case "Cuota mensual Muay Thai + MMA":
-        return 80;
+        return 40;
       case "Matrícula":
         return 30;
       default:
-        return 0;
+        return 30;
     }
   };
+
+  const filteredUsers = users.filter((user) =>
+    user.label.toLowerCase().includes(userSearchTerm.toLowerCase())
+  );
 
   if (isLoading || loadingPayments) {
     return (
@@ -188,22 +313,20 @@ export default function PaymentsPage() {
       <div className="max-w-6xl mx-auto px-4">
         {/* Header */}
         <div className="mb-6">
-          <Link href="/">
-            <Button variant="outline" size="sm" className="mb-4">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Volver al inicio
-            </Button>
-          </Link>
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <h1 className="text-3xl font-bold text-gray-900">
-              Gestión de Pagos
-            </h1>
-            {!isCreating && (
-              <Button onClick={() => setIsCreating(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Registrar Pago
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">
+            Gestión de Clases
+          </h1>
+          <div className="flex items-center justify-between">
+            <Link href="/">
+              <Button variant="outline">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Volver
               </Button>
-            )}
+            </Link>
+            <Button onClick={() => setIsCreating(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Registrar Pago
+            </Button>
           </div>
         </div>
 
@@ -234,25 +357,62 @@ export default function PaymentsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div>
                   <label
-                    htmlFor="full_name"
+                    htmlFor="user"
                     className="block text-sm font-medium text-gray-700"
                   >
-                    Nombre Completo
+                    Usuario
                   </label>
-                  <input
-                    type="text"
-                    id="full_name"
-                    value={formData.full_name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, full_name: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                    placeholder="Nombre completo del usuario"
-                  />
+                  <Popover
+                    open={openUserSearch}
+                    onOpenChange={setOpenUserSearch}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openUserSearch}
+                        className="w-full justify-between"
+                      >
+                        {formData.full_name || "Seleccionar usuario..."}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0">
+                      <Command>
+                        <CommandInput
+                          placeholder="Buscar usuario..."
+                          value={userSearchTerm}
+                          onValueChange={setUserSearchTerm}
+                        />
+                        <CommandEmpty>No se encontraron usuarios.</CommandEmpty>
+                        <CommandGroup>
+                          {filteredUsers.map((user) => (
+                            <CommandItem
+                              key={user.id}
+                              onSelect={() => {
+                                setFormData({
+                                  ...formData,
+                                  user_id: user.id,
+                                  full_name: user.label,
+                                });
+                                setOpenUserSearch(false);
+                                setUserSearchTerm("");
+                              }}
+                            >
+                              <div>
+                                <p>{user.label}</p>
+                                <p className="text-sm text-gray-500">
+                                  {user.email}
+                                </p>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
 
                 <div>
@@ -301,7 +461,7 @@ export default function PaymentsPage() {
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        amount: parseFloat(e.target.value),
+                        amount: parseFloat(e.target.value) || 0,
                       })
                     }
                     className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -370,7 +530,7 @@ export default function PaymentsPage() {
         )}
 
         {/* Lista de pagos */}
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
           {filteredPayments.map((payment) => (
             <Card key={payment.id}>
               <CardContent className="py-4">

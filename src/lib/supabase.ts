@@ -1,42 +1,60 @@
 import { createClient } from "@supabase/supabase-js";
 
-export interface Database {
+export type Database = {
   public: {
     Tables: {
       profiles: {
         Row: {
           id: string;
-          email: string;
           name: string;
           first_surname: string;
-          second_surname: string;
-          dni: string;
-          phone: string;
+          second_surname: string | null;
+          email: string;
+          dni: string | null;
+          phone: string | null;
+          birth_date: string | null;
+          gender: "male" | "female" | "other" | null;
           role: "admin" | "staff" | "user";
+          status: "active" | "suspended" | "pending";
+          health_conditions: string | null;
+          emergency_contact: string | null;
+          emergency_phone: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id: string;
-          email: string;
           name: string;
           first_surname: string;
-          second_surname: string;
-          dni: string;
-          phone: string;
+          second_surname?: string | null;
+          email: string;
+          dni?: string | null;
+          phone?: string | null;
+          birth_date?: string | null;
+          gender?: "male" | "female" | "other" | null;
           role?: "admin" | "staff" | "user";
+          status?: "active" | "suspended" | "pending";
+          health_conditions?: string | null;
+          emergency_contact?: string | null;
+          emergency_phone?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
-          email?: string;
           name?: string;
           first_surname?: string;
-          second_surname?: string;
-          dni?: string;
-          phone?: string;
+          second_surname?: string | null;
+          email?: string;
+          dni?: string | null;
+          phone?: string | null;
+          birth_date?: string | null;
+          gender?: "male" | "female" | "other" | null;
           role?: "admin" | "staff" | "user";
+          status?: "active" | "suspended" | "pending";
+          health_conditions?: string | null;
+          emergency_contact?: string | null;
+          emergency_phone?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -47,9 +65,7 @@ export interface Database {
           name: "Muay Thai" | "MMA";
           description: string | null;
           schedule: string;
-          frequency: string;
           capacity: number;
-          current_enrollments: number;
           created_at: string;
           updated_at: string;
         };
@@ -58,9 +74,7 @@ export interface Database {
           name: "Muay Thai" | "MMA";
           description?: string | null;
           schedule: string;
-          frequency: string;
           capacity: number;
-          current_enrollments?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -69,9 +83,7 @@ export interface Database {
           name?: "Muay Thai" | "MMA";
           description?: string | null;
           schedule?: string;
-          frequency?: string;
           capacity?: number;
-          current_enrollments?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -100,45 +112,36 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
-          full_name: string;
-          concept:
-            | "Cuota mensual Muay Thai"
-            | "Cuota mensual MMA"
-            | "Cuota mensual Muay Thai + MMA"
-            | "Matrícula";
+          full_name: string | null;
           amount: number;
+          concept: string;
           payment_method: "Efectivo" | "Bizum" | "Transferencia";
-          payment_date: string;
+          status: "pending" | "completed" | "failed";
+          payment_date: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
           user_id: string;
-          full_name: string;
-          concept:
-            | "Cuota mensual Muay Thai"
-            | "Cuota mensual MMA"
-            | "Cuota mensual Muay Thai + MMA"
-            | "Matrícula";
-          amount?: number;
+          full_name?: string | null;
+          amount: number;
+          concept: string;
           payment_method?: "Efectivo" | "Bizum" | "Transferencia";
-          payment_date: string;
+          status?: "pending" | "completed" | "failed";
+          payment_date?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
           user_id?: string;
-          full_name?: string;
-          concept?:
-            | "Cuota mensual Muay Thai"
-            | "Cuota mensual MMA"
-            | "Cuota mensual Muay Thai + MMA"
-            | "Matrícula";
+          full_name?: string | null;
           amount?: number;
+          concept?: string;
           payment_method?: "Efectivo" | "Bizum" | "Transferencia";
-          payment_date?: string;
+          status?: "pending" | "completed" | "failed";
+          payment_date?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -153,19 +156,16 @@ export interface Database {
     Enums: {
       [_ in never]: never;
     };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
   };
-}
+};
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-  },
-});
+export const supabase = createClient<Database>(supabaseUrl, supabaseKey);
 
 export type Tables<T extends keyof Database["public"]["Tables"]> =
   Database["public"]["Tables"][T]["Row"];

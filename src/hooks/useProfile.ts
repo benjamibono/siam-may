@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Tables } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
+import { toast } from "sonner";
 
 export function useProfile() {
   const [profile, setProfile] = useState<Tables<"profiles"> | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSuspended, setIsSuspended] = useState(false);
 
   useEffect(() => {
     // Get initial session
@@ -42,6 +44,7 @@ export function useProfile() {
         fetchProfile(session.user.id);
       } else {
         setProfile(null);
+        setIsSuspended(false);
         setIsLoading(false);
       }
 
@@ -49,6 +52,7 @@ export function useProfile() {
       if (event === "SIGNED_OUT") {
         setProfile(null);
         setUser(null);
+        setIsSuspended(false);
         setIsLoading(false);
       }
     });
@@ -73,7 +77,30 @@ export function useProfile() {
         throw error;
       }
 
+      // Verificar si la cuenta está suspendida
+      if (data.status === "suspended") {
+        setIsSuspended(true);
+        toast.error("Cuenta suspendida. Contacte con el administrador.");
+        // Cerrar sesión automáticamente
+        await supabase.auth.signOut();
+        setProfile(null);
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
+      // Mostrar mensaje informativo para cuentas pendientes
+      if (data.status === "pending") {
+        toast.info(
+          "Cuenta pendiente de pago. Revisa las condiciones de inscripción.",
+          {
+            duration: 5000,
+          }
+        );
+      }
+
       setProfile(data);
+      setIsSuspended(false);
       console.log("Profile set successfully:", data);
     } catch (error) {
       console.error("Error fetching profile:", error);
@@ -90,6 +117,7 @@ export function useProfile() {
     profile,
     user,
     isLoading,
+    isSuspended,
     isAdmin,
     isStaff,
   };

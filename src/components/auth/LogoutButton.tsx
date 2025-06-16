@@ -30,11 +30,13 @@ export function LogoutButton() {
 
       // Opcional: forzar recarga de la página
       window.location.reload();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error during logout:", error);
-      toast.error(
-        `Error al cerrar sesión: ${error.message || "Error desconocido"}`
-      );
+      if (error instanceof Error) {
+        toast.error(`Error al cerrar sesión: ${error.message}`);
+      } else {
+        toast.error("Error desconocido al cerrar sesión");
+      }
     }
   };
 

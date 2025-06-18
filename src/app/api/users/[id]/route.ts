@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { withRateLimit, getUserIdentifier } from "@/lib/rate-limit";
 
 // Cliente con service role key para operaciones admin
 const supabaseAdmin = createClient(
@@ -58,7 +59,8 @@ async function verifyAdminOrStaff(request: NextRequest) {
     if (profile?.role !== "admin" && profile?.role !== "staff") return null;
 
     return user;
-  } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (_error) {
     return null;
   }
 }
@@ -108,17 +110,17 @@ export async function GET(
 }
 
 // PUT - Actualizar usuario específico
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+async function putHandler(request: NextRequest): Promise<NextResponse> {
   const user = await verifyAdminOrStaff(request);
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
   try {
-    const { id } = await params;
+    // Extraer ID del URL
+    const url = new URL(request.url);
+    const pathSegments = url.pathname.split("/");
+    const id = pathSegments[pathSegments.length - 1]; // El ID es el último segmento
     const updateData = await request.json();
 
     const { data, error } = await supabaseAdmin
@@ -142,6 +144,11 @@ export async function PUT(
     );
   }
 }
+
+export const PUT = withRateLimit(
+  "PROFILE_UPDATE",
+  getUserIdentifier
+)(putHandler);
 
 // DELETE - Eliminar usuario específico
 export async function DELETE(

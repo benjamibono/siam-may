@@ -1,13 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { withRateLimit, getUserIdentifier } from "@/lib/rate-limit";
 
-export async function GET(request: Request) {
+async function getHandler(request: NextRequest): Promise<NextResponse> {
   try {
     // Obtener el token de autenticación del header
     const authHeader = request.headers.get("authorization");
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.log("No auth header found");
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
@@ -20,7 +20,6 @@ export async function GET(request: Request) {
     } = await supabaseAdmin.auth.getUser(token);
 
     if (authError || !user) {
-      console.log("Auth error:", authError);
       return NextResponse.json({ error: "Token inválido" }, { status: 401 });
     }
 
@@ -32,7 +31,6 @@ export async function GET(request: Request) {
       .single();
 
     if (profileError || !profile) {
-      console.log("Profile error:", profileError);
       return NextResponse.json(
         { error: "Usuario no encontrado" },
         { status: 401 }
@@ -40,7 +38,6 @@ export async function GET(request: Request) {
     }
 
     if (profile.role !== "admin" && profile.role !== "staff") {
-      console.log("User role:", profile.role);
       return NextResponse.json(
         { error: "Sin permisos suficientes" },
         { status: 403 }
@@ -55,7 +52,7 @@ export async function GET(request: Request) {
 
     if (classesError) throw classesError;
 
-    // Para cada clase, obtener los usuarios inscritos
+    // Para cada clase, obtener los usuarios inscritos de forma optimizada
     const classesWithEnrollments = await Promise.all(
       (classesData || []).map(async (cls) => {
         const { data: enrollments, error: enrollmentsError } =
@@ -67,10 +64,6 @@ export async function GET(request: Request) {
         if (enrollmentsError) throw enrollmentsError;
 
         const userIds = enrollments?.map((e) => e.user_id) || [];
-        console.log(
-          `Clase ${cls.name}: ${userIds.length} usuarios inscritos`,
-          userIds
-        );
 
         let users = [];
         if (userIds.length > 0) {
@@ -80,11 +73,9 @@ export async function GET(request: Request) {
             .in("id", userIds);
 
           if (usersError) {
-            console.error("Error obteniendo usuarios:", usersError);
             throw usersError;
           }
           users = usersData || [];
-          console.log(`Usuarios obtenidos para ${cls.name}:`, users);
         }
 
         return {
@@ -96,11 +87,15 @@ export async function GET(request: Request) {
     );
 
     return NextResponse.json(classesWithEnrollments);
-  } catch (error) {
-    console.error("Error fetching classes:", error);
+  } catch {
     return NextResponse.json(
       { error: "Error al obtener las clases" },
       { status: 500 }
     );
   }
 }
+
+export const GET = withRateLimit(
+  "GENERAL_REFRESH",
+  getUserIdentifier
+)(getHandler);

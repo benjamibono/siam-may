@@ -125,15 +125,15 @@ export function shouldResetClass(schedule: string): boolean {
   const today = now.getDay();
   const currentTime = now.toTimeString().substring(0, 5);
 
-  const dayMappings: { [key: string]: number } = {
-    Domingo: 0,
-    Lunes: 1,
-    Martes: 2,
-    Miércoles: 3,
-    Jueves: 4,
-    Viernes: 5,
-    Sábado: 6,
-  };
+  // const dayMappings: { [key: string]: number } = {
+  //   Domingo: 0,
+  //   Lunes: 1,
+  //   Martes: 2,
+  //   Miércoles: 3,
+  //   Jueves: 4,
+  //   Viernes: 5,
+  //   Sábado: 6,
+  // };
 
   const dayNames = [
     "Domingo",
@@ -175,15 +175,15 @@ export function getTimeUntilNextClass(schedule: string): string {
   const today = now.getDay();
   const currentTime = now.toTimeString().substring(0, 5);
 
-  const dayMappings: { [key: string]: number } = {
-    Domingo: 0,
-    Lunes: 1,
-    Martes: 2,
-    Miércoles: 3,
-    Jueves: 4,
-    Viernes: 5,
-    Sábado: 6,
-  };
+  // const dayMappings: { [key: string]: number } = {
+  //   Domingo: 0,
+  //   Lunes: 1,
+  //   Martes: 2,
+  //   Miércoles: 3,
+  //   Jueves: 4,
+  //   Viernes: 5,
+  //   Sábado: 6,
+  // };
 
   const dayNames = [
     "Domingo",

@@ -5,13 +5,17 @@ import { getClassesToReset } from "@/lib/class-schedule";
 // Esta función se ejecuta para reiniciar clases que han terminado
 export async function GET(request: NextRequest) {
   // Verificar que la request viene de Vercel Cron
-  const authHeader = request.headers.get('authorization');
+  const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
   try {
-    console.log(`[CRON] Iniciando reinicio automático de clases - ${new Date().toISOString()}`);
+    // const now = new Date(); // Not used in this context
+    // Removed unused variables
+    // const currentTime = now.toTimeString().substring(0, 5);
+    // const currentDay = now.toLocaleDateString("es-ES", { weekday: "long" });
+    // const currentDayCapitalized = currentDay.charAt(0).toUpperCase() + currentDay.slice(1);
 
     // Obtener todas las clases
     const { data: classes, error: classesError } = await supabaseAdmin
@@ -45,8 +49,8 @@ export async function GET(request: NextRequest) {
 
     // Reiniciar cada clase (vaciar inscripciones)
     for (const classId of classesToReset) {
-      const classInfo = classes.find(c => c.id === classId);
-      
+      const classInfo = classes.find((c) => c.id === classId);
+
       try {
         // Eliminar todas las inscripciones de esta clase
         const { error: deleteError } = await supabaseAdmin
@@ -55,7 +59,6 @@ export async function GET(request: NextRequest) {
           .eq("class_id", classId);
 
         if (deleteError) {
-          console.error(`[CRON] Error resetting class ${classId}:`, deleteError);
           continue;
         }
 
@@ -66,11 +69,8 @@ export async function GET(request: NextRequest) {
           schedule: classInfo?.schedule || "",
           resetAt: new Date().toISOString(),
         });
-
-        console.log(`[CRON] Reset class ${classInfo?.name} (${classId})`);
-
-      } catch (error) {
-        console.error(`[CRON] Error processing class ${classId}:`, error);
+      } catch {
+        // Skip individual class errors
       }
     }
 
@@ -83,14 +83,11 @@ export async function GET(request: NextRequest) {
       resetDetails,
       message: `${resetCount} clases reiniciadas de ${classesToReset.length} elegibles`,
     });
-
-  } catch (error) {
-    console.error("[CRON] Error resetting classes:", error);
+  } catch {
     return NextResponse.json(
-      { 
-        error: "Error en reinicio automático de clases", 
+      {
+        error: "Error en reinicio automático de clases",
         timestamp: new Date().toISOString(),
-        details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     );
@@ -100,4 +97,4 @@ export async function GET(request: NextRequest) {
 // También permitir POST para testing manual
 export async function POST(request: NextRequest) {
   return GET(request);
-} 
+}

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { supabase } from "@/lib/supabase";
-import { 
-  getCurrentMonthYear, 
-  isPaymentFromCurrentMonth, 
-  getNewUserStatus 
+import {
+  getCurrentMonthYear,
+  // isPaymentFromCurrentMonth, // Unused import
+  getNewUserStatus,
 } from "@/lib/payment-logic";
 
 async function verifyAdminOrStaff(request: NextRequest) {
@@ -30,7 +30,8 @@ async function verifyAdminOrStaff(request: NextRequest) {
     if (profile?.role !== "admin" && profile?.role !== "staff") return null;
 
     return user;
-  } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (_error) {
     return null;
   }
 }
@@ -63,16 +64,25 @@ export async function POST(request: NextRequest) {
         .from("payments")
         .select("payment_date")
         .eq("user_id", userProfile.id)
-        .gte("payment_date", `${year}-${month.toString().padStart(2, '0')}-01`)
-        .lt("payment_date", `${year}-${(month + 1).toString().padStart(2, '0')}-01`);
+        .gte("payment_date", `${year}-${month.toString().padStart(2, "0")}-01`)
+        .lt(
+          "payment_date",
+          `${year}-${(month + 1).toString().padStart(2, "0")}-01`
+        );
 
       if (paymentsError) {
-        console.error(`Error checking payments for user ${userProfile.id}:`, paymentsError);
+        console.error(
+          `Error checking payments for user ${userProfile.id}:`,
+          paymentsError
+        );
         continue;
       }
 
       const hasCurrentMonthPayment = payments && payments.length > 0;
-      const newStatus = getNewUserStatus(userProfile.status, hasCurrentMonthPayment);
+      const newStatus = getNewUserStatus(
+        userProfile.status,
+        hasCurrentMonthPayment
+      );
 
       // Solo actualizar si el estado ha cambiado
       if (newStatus !== userProfile.status) {
@@ -85,17 +95,25 @@ export async function POST(request: NextRequest) {
           .eq("id", userProfile.id);
 
         if (updateError) {
-          console.error(`Error updating status for user ${userProfile.id}:`, updateError);
+          console.error(
+            `Error updating status for user ${userProfile.id}:`,
+            updateError
+          );
         } else {
           updatedCount++;
-          console.log(`Updated user ${userProfile.id} from ${userProfile.status} to ${newStatus}`);
+          console.log(
+            `Updated user ${userProfile.id} from ${userProfile.status} to ${newStatus}`
+          );
 
           // Si se suspende la cuenta, cerrar sesiones activas
           if (newStatus === "suspended") {
             try {
               await supabaseAdmin.auth.admin.signOut(userProfile.id, "global");
             } catch (signOutError) {
-              console.error(`Error signing out user ${userProfile.id}:`, signOutError);
+              console.error(
+                `Error signing out user ${userProfile.id}:`,
+                signOutError
+              );
             }
           }
         }
@@ -140,7 +158,10 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (userError || !userProfile) {
-      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Usuario no encontrado" },
+        { status: 404 }
+      );
     }
 
     // Verificar pagos del mes actual
@@ -149,15 +170,21 @@ export async function GET(request: NextRequest) {
       .from("payments")
       .select("payment_date, concept")
       .eq("user_id", userId)
-      .gte("payment_date", `${year}-${month.toString().padStart(2, '0')}-01`)
-      .lt("payment_date", `${year}-${(month + 1).toString().padStart(2, '0')}-01`)
+      .gte("payment_date", `${year}-${month.toString().padStart(2, "0")}-01`)
+      .lt(
+        "payment_date",
+        `${year}-${(month + 1).toString().padStart(2, "0")}-01`
+      )
       .order("payment_date", { ascending: false })
       .limit(1);
 
     if (paymentsError) throw paymentsError;
 
     const hasCurrentMonthPayment = payments && payments.length > 0;
-    const newStatus = getNewUserStatus(userProfile.status, hasCurrentMonthPayment);
+    const newStatus = getNewUserStatus(
+      userProfile.status,
+      hasCurrentMonthPayment
+    );
 
     // Actualizar estado si es necesario
     if (newStatus !== userProfile.status) {
@@ -193,4 +220,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}

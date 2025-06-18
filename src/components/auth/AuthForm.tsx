@@ -3,15 +3,16 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useProfile } from "@/hooks/useProfile";
 import { toast } from "sonner";
+import Image from "next/image";
 
 export function AuthForm() {
   const { user } = useProfile();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [profileData, setProfileData] = useState({
     name: "",
     first_surname: "",
@@ -26,32 +27,48 @@ export function AuthForm() {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isLogin && password !== confirmPassword) {
+      toast.error("Las contraseñas no coinciden");
+      return;
+    }
+
     setLoading(true);
 
     try {
       if (isLogin) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
+        const { handleLogin } = await import("@/lib/enrollment-api");
+        const result = await handleLogin(email, password);
 
-        // Verificar si la cuenta está suspendida
-        if (data.user) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("status")
-            .eq("id", data.user.id)
-            .single();
+        if (result.success) {
+          // Usar el login tradicional de Supabase como fallback
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
 
-          if (profile?.status === "suspended") {
-            await supabase.auth.signOut();
-            toast.error("Cuenta suspendida. Contacte con el administrador.");
-            return;
+          if (error) throw error;
+
+          // Verificar si la cuenta está suspendida
+          if (data.user) {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("status")
+              .eq("id", data.user.id)
+              .single();
+
+            if (profile?.status === "suspended") {
+              await supabase.auth.signOut();
+              toast.error("Cuenta suspendida. Contacte con el administrador.");
+              return;
+            }
           }
-        }
 
-        toast.success("¡Bienvenido!");
+          toast.success("¡Bienvenido!");
+        } else {
+          toast.error(result.error || "Error de autenticación");
+          return;
+        }
       } else {
         // Validar campos requeridos para registro
         if (
@@ -86,12 +103,15 @@ export function AuthForm() {
             .eq("id", data.user.id);
 
           if (profileError) {
-            console.error("Error updating profile:", profileError);
             toast.error("Usuario creado pero error al actualizar perfil");
           } else {
             toast.success(
               "¡Cuenta creada exitosamente! Puedes iniciar sesión."
             );
+            // Cambiar a modo login después del registro exitoso
+            setIsLogin(true);
+            setPassword("");
+            setConfirmPassword("");
           }
         }
       }
@@ -107,75 +127,188 @@ export function AuthForm() {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <CardHeader>
-          <CardTitle className="text-center">
-            {isLogin ? "Iniciar Sesión" : "Crear Cuenta"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleAuth} className="flex flex-col gap-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium mb-1">
-                Email *
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="tu@email.com"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium mb-1"
-              >
-                Contraseña *
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="••••••••"
-              />
-            </div>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 max-h-[95vh] overflow-y-auto">
+        {/* Logo */}
+        <div className="flex justify-center mb-8">
+          <div className="w-24 h-24 relative">
+            <Image
+              src="/MMA2.webp"
+              alt="Siam May Logo"
+              fill
+              className="object-contain rounded-2xl"
+            />
+          </div>
+        </div>
 
-            {/* Campos adicionales para registro */}
-            {!isLogin && (
-              <>
-                <div>
-                  <label
-                    htmlFor="name"
-                    className="block text-sm font-medium mb-1"
+        {/* Título */}
+        <h1 className="text-2xl font-bold text-center text-gray-900 mb-2">
+          {isLogin ? "Iniciar Sesión" : "Crea Tu Cuenta"}
+        </h1>
+
+        {/* Subtítulo con enlace */}
+        <p className="text-center text-gray-600 mb-8">
+          {isLogin ? (
+            <>
+              ¿No tienes una cuenta?{" "}
+              <button
+                type="button"
+                onClick={() => setIsLogin(false)}
+                className="text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Regístrate aquí
+              </button>
+            </>
+          ) : (
+            <>
+              ¿Ya tienes una cuenta?{" "}
+              <button
+                type="button"
+                onClick={() => setIsLogin(true)}
+                className="text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Inicia sesión aquí
+              </button>
+            </>
+          )}
+        </p>
+
+        {/* Formulario */}
+        <form onSubmit={handleAuth} className="space-y-6">
+          {isLogin ? (
+            // Formulario de Login
+            <>
+              <div>
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  placeholder="Ingresa tu email"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Contraseña
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  placeholder="Ingresa tu contraseña"
+                />
+                <div className="text-right mt-2">
+                  <button
+                    type="button"
+                    className="text-sm text-blue-600 hover:text-blue-800"
                   >
-                    Nombre *
-                  </label>
-                  <input
-                    id="name"
-                    type="text"
-                    value={profileData.name}
-                    onChange={(e) =>
-                      setProfileData({ ...profileData, name: e.target.value })
-                    }
-                    required
-                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Tu nombre"
-                  />
+                    ¿Olvidaste tu contraseña?
+                  </button>
                 </div>
+              </div>
+            </>
+          ) : (
+            // Formulario de Registro
+            <>
+              <h1 className="text-xl font-bold text-center text-gray-900 mb-2">
+                Todos los campos son obligatorios
+              </h1>
+              <div>
+                <label
+                  htmlFor="reg-email"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Email
+                </label>
+                <input
+                  id="reg-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  placeholder="Ingresa tu email"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="reg-password"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Contraseña
+                </label>
+                <input
+                  id="reg-password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  placeholder="Ingresa tu contraseña"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="confirm-password"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Confirmar contraseña
+                </label>
+                <input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  placeholder="Confirmar contraseña"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="reg-name"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Nombre
+                </label>
+                <input
+                  id="reg-name"
+                  type="text"
+                  value={profileData.name}
+                  onChange={(e) =>
+                    setProfileData({ ...profileData, name: e.target.value })
+                  }
+                  required
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  placeholder="Ingresa tu nombre"
+                />
+              </div>
+              {/* Campos adicionales para registro */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label
                     htmlFor="first_surname"
-                    className="block text-sm font-medium mb-1"
+                    className="block text-sm font-medium text-gray-700 mb-2"
                   >
-                    Primer Apellido *
+                    Primer Apellido
                   </label>
                   <input
                     id="first_surname"
@@ -188,14 +321,14 @@ export function AuthForm() {
                       })
                     }
                     required
-                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Tu primer apellido"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="Apellido"
                   />
                 </div>
                 <div>
                   <label
                     htmlFor="second_surname"
-                    className="block text-sm font-medium mb-1"
+                    className="block text-sm font-medium text-gray-700 mb-2"
                   >
                     Segundo Apellido
                   </label>
@@ -209,16 +342,19 @@ export function AuthForm() {
                         second_surname: e.target.value,
                       })
                     }
-                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Tu segundo apellido"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="Apellido"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label
                     htmlFor="dni"
-                    className="block text-sm font-medium mb-1"
+                    className="block text-sm font-medium text-gray-700 mb-2"
                   >
-                    DNI *
+                    DNI
                   </label>
                   <input
                     id="dni"
@@ -228,16 +364,16 @@ export function AuthForm() {
                       setProfileData({ ...profileData, dni: e.target.value })
                     }
                     required
-                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                     placeholder="12345678X"
                   />
                 </div>
                 <div>
                   <label
                     htmlFor="phone"
-                    className="block text-sm font-medium mb-1"
+                    className="block text-sm font-medium text-gray-700 mb-2"
                   >
-                    Teléfono *
+                    Teléfono
                   </label>
                   <input
                     id="phone"
@@ -247,34 +383,28 @@ export function AuthForm() {
                       setProfileData({ ...profileData, phone: e.target.value })
                     }
                     required
-                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                     placeholder="666123456"
                   />
                 </div>
-              </>
-            )}
+              </div>
+            </>
+          )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading
-                ? "Cargando..."
-                : isLogin
-                ? "Iniciar Sesión"
-                : "Crear Cuenta"}
-            </Button>
-          </form>
-          <div className="mt-4 text-center">
-            <button
-              type="button"
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-sm text-blue-600 hover:underline"
-            >
-              {isLogin
-                ? "¿No tienes cuenta? Crear una"
-                : "¿Ya tienes cuenta? Iniciar sesión"}
-            </button>
-          </div>
-        </CardContent>
-      </Card>
+          {/* Botón de acción */}
+          <Button
+            type="submit"
+            className="w-full py-3 bg-black hover:bg-gray-800 text-white font-medium rounded-lg transition-colors"
+            disabled={loading}
+          >
+            {loading
+              ? "Cargando..."
+              : isLogin
+              ? "Iniciar sesión"
+              : "Crear Cuenta y Empezar"}
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }

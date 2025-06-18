@@ -3,8 +3,11 @@
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 export function LogoutButton() {
+  const router = useRouter();
+
   const handleLogout = async () => {
     try {
       // Verificar si hay una sesión activa antes de cerrarla
@@ -29,14 +32,9 @@ export function LogoutButton() {
       toast.success("Sesión cerrada correctamente");
 
       // Opcional: forzar recarga de la página
-      window.location.reload();
-    } catch (error: unknown) {
-      console.error("Error during logout:", error);
-      if (error instanceof Error) {
-        toast.error(`Error al cerrar sesión: ${error.message}`);
-      } else {
-        toast.error("Error desconocido al cerrar sesión");
-      }
+      router.push("/");
+    } catch {
+      toast.error("Error al cerrar sesión");
     }
   };
 

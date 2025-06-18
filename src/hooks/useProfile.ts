@@ -16,7 +16,6 @@ export function useProfile() {
       .getSession()
       .then(({ data: { session }, error }) => {
         if (error) {
-          console.error("Error getting session:", error);
           setIsLoading(false);
           return;
         }
@@ -28,8 +27,7 @@ export function useProfile() {
           setIsLoading(false);
         }
       })
-      .catch((error) => {
-        console.error("Error in getSession:", error);
+      .catch(() => {
         setIsLoading(false);
       });
 
@@ -37,8 +35,6 @@ export function useProfile() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log("Auth state changed:", event, session?.user?.id);
-
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchProfile(session.user.id);
@@ -62,18 +58,13 @@ export function useProfile() {
 
   const fetchProfile = async (userId: string) => {
     try {
-      console.log("Attempting to fetch profile for user:", userId);
-
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", userId)
         .single();
 
-      console.log("Profile fetch result:", { data, error });
-
       if (error) {
-        console.error("Profile fetch error details:", error);
         throw error;
       }
 
@@ -101,10 +92,8 @@ export function useProfile() {
 
       setProfile(data);
       setIsSuspended(false);
-      console.log("Profile set successfully:", data);
-    } catch (error) {
-      console.error("Error fetching profile:", error);
-      console.error("Error details:", JSON.stringify(error, null, 2));
+    } catch {
+      // Removed console.error statements
     } finally {
       setIsLoading(false);
     }

@@ -6,13 +6,14 @@ import { useProfile } from "@/hooks/useProfile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { BookOpen, Calendar, Users, AlertCircle } from "lucide-react";
+import { Calendar, Users, Clock } from "lucide-react";
+import Image from "next/image";
 import type { Tables } from "@/lib/supabase";
 import {
   canEnrollInClasses,
-  getEnrollmentStatusMessage,
+  // getEnrollmentStatusMessage, // Unused import
   canEnrollInClassType,
-  getClassRestrictionMessage,
+  // getClassRestrictionMessage, // Unused import
   getCurrentMonthYear,
 } from "@/lib/payment-logic";
 
@@ -21,74 +22,39 @@ interface ClassWithEnrollment extends Tables<"classes"> {
   enrollment_count: number;
 }
 
-// Helper function to format schedule
-const formatSchedule = (schedule: string, isEnrolled: boolean = false) => {
-  if (!schedule) return "";
-
-  // Extract days and time from schedule (assuming format like "Lunes, Miércoles, Viernes 19:00-20:00")
-  const timeRegex = /\d{1,2}:\d{2}-\d{1,2}:\d{2}/;
-  const timeMatch = schedule.match(timeRegex);
-  const time = timeMatch ? timeMatch[0] : "";
-
-  // Get the days part (everything before the time)
-  const daysText = schedule.replace(timeRegex, "").trim().replace(/,$/, "");
-
-  if (isEnrolled) {
-    // For enrolled classes, show "Próximo [día]" or "Hoy" or "Mañana"
-    const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
-    const dayNames = [
-      "Domingo",
-      "Lunes",
-      "Martes",
-      "Miércoles",
-      "Jueves",
-      "Viernes",
-      "Sábado",
-    ];
-
-    // Simple logic to determine next class day
-    const dayMappings: { [key: string]: number } = {
-      Lunes: 1,
-      Martes: 2,
-      Miércoles: 3,
-      Jueves: 4,
-      Viernes: 5,
-      Sábado: 6,
-      Domingo: 0,
-    };
-
-    // Find if today is a class day
-    const todayName = dayNames[today];
-    const tomorrowName = dayNames[(today + 1) % 7]; // Handle Sunday case
-    if (daysText.includes(todayName)) {
-      return `Hoy ${time}`;
-    } else if (daysText.includes(tomorrowName)) {
-      return `Mañana ${time}`;
-    }
-
-    // Find next class day
-    const classDays = Object.keys(dayMappings).filter((day) =>
-      daysText.includes(day)
-    );
-    let nextDay = "";
-    let minDiff = 8; // More than a week
-
-    classDays.forEach((day) => {
-      const dayNum = dayMappings[day];
-      let diff = dayNum - today;
-      if (diff <= 0) diff += 7; // Next week
-      if (diff < minDiff) {
-        minDiff = diff;
-        nextDay = day;
-      }
-    });
-
-    return `Próximo ${nextDay} ${time}`;
-  } else {
-    // For available classes, replace last comma with "y"
-    const formattedDays = daysText.replace(/,([^,]*)$/, " y$1");
-    return `${formattedDays} ${time}`;
+// Función para obtener el icono apropiado según el tipo de clase
+const getClassIcon = (className: string, description?: string) => {
+  // Primero verificar condiciones de descripción
+  if (description && description.toLowerCase().includes("bjj")) {
+    return { src: "/lock.png", alt: "BJJ" };
   }
+  if (description && description.toLowerCase().includes("sparring")) {
+    return { src: "/opponent.png", alt: "Sparring" };
+  }
+  // Luego verificar nombre de clase
+  if (className === "Muay Thai") {
+    return { src: "/shield.png", alt: "Muay Thai" };
+  }
+  if (className === "MMA") {
+    return { src: "/gym.png", alt: "MMA" };
+  }
+  // Icono por defecto
+  return { src: "/gym.png", alt: "Clase" };
+};
+
+// Función para parsear el horario de clases
+const parseSchedule = (schedule: string) => {
+  if (!schedule) return { days: [], start: "", end: "" };
+
+  // Intentar parsear el formato "Lunes, Miércoles 19:00-20:30"
+  const match = schedule.match(/^(.+?)\s+(\d{2}:\d{2})-(\d{2}:\d{2})$/);
+  if (match) {
+    const [, daysStr, start, end] = match;
+    const days = daysStr.split(/,\s*(?:y\s+)?/);
+    return { days, start, end };
+  }
+
+  return { days: [], start: "", end: "" };
 };
 
 export function UserClassesContent() {
@@ -127,8 +93,8 @@ export function UserClassesContent() {
       if (error) throw error;
 
       setLastPayment(payments && payments.length > 0 ? payments[0] : null);
-    } catch (error) {
-      console.error("Error fetching last payment:", error);
+    } catch {
+      // Handle error silently
     }
   };
 
@@ -164,7 +130,7 @@ export function UserClassesContent() {
             .eq("class_id", cls.id);
 
           if (countError) {
-            console.error("Error counting enrollments:", countError);
+            // Handle error silently
           }
 
           classesWithEnrollment.push({
@@ -176,8 +142,7 @@ export function UserClassesContent() {
       }
 
       setClasses(classesWithEnrollment);
-    } catch (error) {
-      console.error("Error fetching classes:", error);
+    } catch {
       toast.error("Error al cargar las clases");
     } finally {
       setLoadingClasses(false);
@@ -187,53 +152,33 @@ export function UserClassesContent() {
   const handleEnrollment = async (
     classId: string,
     isEnrolled: boolean,
-    className: string
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _className: string
   ) => {
     if (!user || !profile) return;
 
+    const { handleEnrollment: handleEnrollmentApi } = await import(
+      "@/lib/enrollment-api"
+    );
+
     try {
-      if (isEnrolled) {
-        // Desinscribirse (siempre permitido)
-        const { error } = await supabase
-          .from("class_enrollments")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("class_id", classId);
+      const action = isEnrolled ? "unenroll" : "enroll";
+      const result = await handleEnrollmentApi(action, classId);
 
-        if (error) throw error;
-        toast.success("Te has desinscrito de la clase");
+      if (result.success) {
+        toast.success(
+          result.message ||
+            (isEnrolled
+              ? "Te has desinscrito de la clase"
+              : "Te has inscrito a la clase")
+        );
+        // Actualizar la lista
+        fetchClasses();
       } else {
-        // Verificar si puede inscribirse según el estado
-        if (!canEnrollInClasses(profile.status)) {
-          const message = getEnrollmentStatusMessage(profile.status);
-          toast.error(message);
-          return;
-        }
-
-        // Verificar si puede inscribirse según el tipo de pago
-        if (!canEnrollInClassType(className, lastPayment?.concept || null)) {
-          const message = getClassRestrictionMessage(
-            className,
-            lastPayment?.concept || null
-          );
-          toast.error(message);
-          return;
-        }
-
-        // Inscribirse
-        const { error } = await supabase.from("class_enrollments").insert({
-          user_id: user.id,
-          class_id: classId,
-        });
-
-        if (error) throw error;
-        toast.success("Te has inscrito a la clase");
+        toast.error(result.error || "Error al procesar la inscripción");
       }
-
-      // Actualizar la lista
-      fetchClasses();
     } catch (error) {
-      console.error("Error with enrollment:", error);
+      console.error("Error al procesar inscripción:", error);
       toast.error("Error al procesar la inscripción");
     }
   };
@@ -256,7 +201,7 @@ export function UserClassesContent() {
   return (
     <div className="space-y-12">
       {/* Estado del Usuario */}
-      {profile && (
+      {/* {profile && (
         <div className="max-w-4xl mx-auto mb-4">
           <p className="text-sm text-gray-700">
             Estado:{" "}
@@ -265,7 +210,7 @@ export function UserClassesContent() {
             </span>
           </p>
         </div>
-      )}
+      )} */}
 
       {/* Clases Inscritas */}
       <div>
@@ -275,7 +220,13 @@ export function UserClassesContent() {
         {enrolledClasses.length === 0 ? (
           <Card className="max-w-2xl mx-auto">
             <CardContent className="py-12 text-center">
-              <BookOpen className="h-16 w-16 text-gray-400 mx-auto mb-6" />
+              <Image
+                src="/gym.png"
+                alt="Gym"
+                width={30}
+                height={30}
+                className="mx-auto mb-4"
+              />
               <p className="text-lg text-gray-500">
                 No estás inscrito en ninguna clase aún.
               </p>
@@ -290,7 +241,20 @@ export function UserClassesContent() {
               >
                 <CardHeader className="pb-4">
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <BookOpen className="h-5 w-5" />
+                    {(() => {
+                      const icon = getClassIcon(
+                        cls.name,
+                        cls.description || undefined
+                      );
+                      return (
+                        <Image
+                          src={icon.src}
+                          alt={icon.alt}
+                          width={30}
+                          height={30}
+                        />
+                      );
+                    })()}
                     {cls.name}
                   </CardTitle>
                 </CardHeader>
@@ -304,7 +268,23 @@ export function UserClassesContent() {
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <Calendar className="h-4 w-4 flex-shrink-0" />
                       <span className="truncate">
-                        {formatSchedule(cls.schedule, true)}
+                        {(() => {
+                          const parsed = parseSchedule(cls.schedule);
+                          return parsed.days.length > 0
+                            ? parsed.days.join(", ")
+                            : "Sin días definidos";
+                        })()}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Clock className="h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">
+                        {(() => {
+                          const parsed = parseSchedule(cls.schedule);
+                          return parsed.start && parsed.end
+                            ? `${parsed.start} - ${parsed.end}`
+                            : "Sin horario definido";
+                        })()}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -347,7 +327,20 @@ export function UserClassesContent() {
               <Card key={cls.id} className="hover:shadow-lg transition-shadow">
                 <CardHeader className="pb-4">
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <BookOpen className="h-5 w-5" />
+                    {(() => {
+                      const icon = getClassIcon(
+                        cls.name,
+                        cls.description || undefined
+                      );
+                      return (
+                        <Image
+                          src={icon.src}
+                          alt={icon.alt}
+                          width={30}
+                          height={30}
+                        />
+                      );
+                    })()}
                     {cls.name}
                   </CardTitle>
                 </CardHeader>
@@ -361,7 +354,23 @@ export function UserClassesContent() {
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <Calendar className="h-4 w-4 flex-shrink-0" />
                       <span className="truncate">
-                        {formatSchedule(cls.schedule, false)}
+                        {(() => {
+                          const parsed = parseSchedule(cls.schedule);
+                          return parsed.days.length > 0
+                            ? parsed.days.join(", ")
+                            : "Sin días definidos";
+                        })()}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Clock className="h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">
+                        {(() => {
+                          const parsed = parseSchedule(cls.schedule);
+                          return parsed.start && parsed.end
+                            ? `${parsed.start} - ${parsed.end}`
+                            : "Sin horario definido";
+                        })()}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600">

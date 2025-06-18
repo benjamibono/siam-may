@@ -6,9 +6,8 @@ import { useProfile } from "@/hooks/useProfile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CreditCard } from "lucide-react";
+import { CreditCard, Plus } from "lucide-react";
 import type { Tables } from "@/lib/supabase";
 
 // Componente Dialog simple para reset de contraseña
@@ -84,6 +83,534 @@ const PasswordResetDialog = ({
   );
 };
 
+// Componente Dialog para crear pago
+const CreatePaymentDialog = ({
+  isOpen,
+  onClose,
+  targetUser,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  targetUser: Tables<"profiles"> | null;
+}) => {
+  const [formData, setFormData] = useState({
+    user_id: "",
+    full_name: "",
+    concept: "Cuota mensual Muay Thai" as
+      | "Cuota mensual Muay Thai"
+      | "Cuota mensual MMA"
+      | "Cuota mensual Muay Thai + MMA"
+      | "Matrícula",
+    amount: 30,
+    payment_method: "Efectivo" as "Efectivo" | "Bizum" | "Transferencia",
+    payment_date: new Date().toISOString().split("T")[0],
+  });
+
+  useEffect(() => {
+    if (isOpen && targetUser) {
+      // Pre-rellenar con datos del usuario objetivo
+      setFormData((prev) => ({
+        ...prev,
+        user_id: targetUser.id,
+        full_name: `${targetUser.name || ""} ${
+          targetUser.first_surname || ""
+        } ${targetUser.second_surname || ""}`.trim(),
+      }));
+    }
+  }, [isOpen, targetUser]);
+
+  const getConceptAmount = (concept: string) => {
+    switch (concept) {
+      case "Cuota mensual Muay Thai":
+        return 30;
+      case "Cuota mensual MMA":
+        return 30;
+      case "Cuota mensual Muay Thai + MMA":
+        return 40;
+      case "Matrícula":
+        return 30;
+      default:
+        return 30;
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!formData.user_id || !formData.full_name) {
+      toast.error("Datos del usuario requeridos");
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from("payments").insert(formData);
+
+      if (error) throw error;
+      toast.success("Pago registrado correctamente");
+
+      // Procesar automáticamente el estado del usuario después de registrar un pago
+      try {
+        const { data: session } = await supabase.auth.getSession();
+        if (session.session) {
+          const response = await fetch(
+            `/api/payments/process-status?userId=${formData.user_id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${session.session.access_token}`,
+              },
+            }
+          );
+
+          if (response.ok) {
+            const result = await response.json();
+            if (result.statusChanged) {
+              toast.success(
+                `Estado del usuario actualizado a: ${
+                  result.newStatus === "active"
+                    ? "Activo"
+                    : result.newStatus === "pending"
+                    ? "Pendiente"
+                    : "Suspendido"
+                }`
+              );
+            }
+          }
+        }
+      } catch (statusError) {
+        console.error("Error updating user status:", statusError);
+        // No mostrar error al usuario ya que el pago se registró correctamente
+      }
+
+      // Reset form y cerrar dialog
+      setFormData({
+        user_id: "",
+        full_name: "",
+        concept: "Cuota mensual Muay Thai",
+        amount: 30,
+        payment_method: "Efectivo",
+        payment_date: new Date().toISOString().split("T")[0],
+      });
+      onClose();
+      // Recargar la página para mostrar el nuevo pago
+      window.location.reload();
+    } catch (error: unknown) {
+      console.error("Error saving payment:", error);
+      toast.error("Error al guardar el pago");
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-lg font-semibold mb-4">Registrar Nuevo Pago</h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Usuario
+            </label>
+            <input
+              type="text"
+              value={formData.full_name}
+              readOnly
+              className="w-full px-3 py-2 border rounded-md bg-gray-50"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Concepto
+            </label>
+            <select
+              value={formData.concept}
+              onChange={(e) => {
+                const concept = e.target.value as typeof formData.concept;
+                setFormData({
+                  ...formData,
+                  concept,
+                  amount: getConceptAmount(concept),
+                });
+              }}
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="Cuota mensual Muay Thai">
+                Cuota mensual Muay Thai
+              </option>
+              <option value="Cuota mensual MMA">Cuota mensual MMA</option>
+              <option value="Cuota mensual Muay Thai + MMA">
+                Cuota mensual Muay Thai + MMA
+              </option>
+              <option value="Matrícula">Matrícula</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Importe (€)
+            </label>
+            <input
+              type="number"
+              value={formData.amount}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  amount: parseFloat(e.target.value) || 0,
+                })
+              }
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+              min="0"
+              step="0.01"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Método de Pago
+            </label>
+            <select
+              value={formData.payment_method}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  payment_method: e.target
+                    .value as typeof formData.payment_method,
+                })
+              }
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="Efectivo">Efectivo</option>
+              <option value="Bizum">Bizum</option>
+              <option value="Transferencia">Transferencia</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Fecha de Pago
+            </label>
+            <input
+              type="date"
+              value={formData.payment_date}
+              onChange={(e) =>
+                setFormData({ ...formData, payment_date: e.target.value })
+              }
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit">Registrar Pago</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Componente Dialog para opciones de pago (editar/eliminar)
+const PaymentOptionsDialog = ({
+  isOpen,
+  onClose,
+  payment,
+  onEdit,
+  onDelete,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  payment: Tables<"payments"> | null;
+  onEdit: (payment: Tables<"payments">) => void;
+  onDelete: (payment: Tables<"payments">) => void;
+}) => {
+  if (!isOpen || !payment) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+        <h3 className="text-lg font-semibold mb-4">Opciones de Pago</h3>
+
+        {/* Información del pago */}
+        <div className="mb-6 p-4 bg-gray-50 rounded-lg space-y-2">
+          <p>
+            <span className="font-medium">Usuario:</span> {payment.full_name}
+          </p>
+          <p>
+            <span className="font-medium">Concepto:</span> {payment.concept}
+          </p>
+          <p>
+            <span className="font-medium">Importe:</span> {payment.amount}€
+          </p>
+          <p>
+            <span className="font-medium">Método:</span>{" "}
+            {payment.payment_method}
+          </p>
+          <p>
+            <span className="font-medium">Fecha:</span>{" "}
+            {new Date(payment.payment_date).toLocaleDateString()}
+          </p>
+        </div>
+
+        {/* Botones de acción */}
+        <div className="flex flex-col gap-2">
+          <Button
+            onClick={() => {
+              onEdit(payment);
+              onClose();
+            }}
+            className="w-full"
+          >
+            Editar Pago
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (confirm("¿Estás seguro de que quieres eliminar este pago?")) {
+                onDelete(payment);
+                onClose();
+              }
+            }}
+            className="w-full text-red-600 hover:text-red-700 border-red-300 hover:border-red-400"
+          >
+            Eliminar Pago
+          </Button>
+          <Button variant="outline" onClick={onClose} className="w-full">
+            Cancelar
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Componente Dialog para editar pago
+const EditPaymentDialog = ({
+  isOpen,
+  onClose,
+  payment,
+  onSave,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  payment: Tables<"payments"> | null;
+  onSave: () => void;
+}) => {
+  const [formData, setFormData] = useState({
+    concept: "Cuota mensual Muay Thai" as
+      | "Cuota mensual Muay Thai"
+      | "Cuota mensual MMA"
+      | "Cuota mensual Muay Thai + MMA"
+      | "Matrícula",
+    amount: 30,
+    payment_method: "Efectivo" as "Efectivo" | "Bizum" | "Transferencia",
+    payment_date: new Date().toISOString().split("T")[0],
+  });
+
+  useEffect(() => {
+    if (isOpen && payment) {
+      setFormData({
+        concept: payment.concept as typeof formData.concept,
+        amount: payment.amount,
+        payment_method:
+          payment.payment_method as typeof formData.payment_method,
+        payment_date: payment.payment_date,
+      });
+    }
+  }, [isOpen, payment]);
+
+  const getConceptAmount = (concept: string) => {
+    switch (concept) {
+      case "Cuota mensual Muay Thai":
+        return 30;
+      case "Cuota mensual MMA":
+        return 30;
+      case "Cuota mensual Muay Thai + MMA":
+        return 40;
+      case "Matrícula":
+        return 30;
+      default:
+        return 30;
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!payment) return;
+
+    try {
+      const { error } = await supabase
+        .from("payments")
+        .update({
+          ...formData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", payment.id);
+
+      if (error) throw error;
+      toast.success("Pago actualizado correctamente");
+
+      // Procesar automáticamente el estado del usuario después de actualizar un pago
+      try {
+        const { data: session } = await supabase.auth.getSession();
+        if (session.session) {
+          const response = await fetch(
+            `/api/payments/process-status?userId=${payment.user_id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${session.session.access_token}`,
+              },
+            }
+          );
+
+          if (response.ok) {
+            const result = await response.json();
+            if (result.statusChanged) {
+              toast.success(
+                `Estado del usuario actualizado a: ${
+                  result.newStatus === "active"
+                    ? "Activo"
+                    : result.newStatus === "pending"
+                    ? "Pendiente"
+                    : "Suspendido"
+                }`
+              );
+            }
+          }
+        }
+      } catch (statusError) {
+        console.error("Error updating user status:", statusError);
+      }
+
+      onSave();
+      onClose();
+    } catch (error: unknown) {
+      console.error("Error updating payment:", error);
+      toast.error("Error al actualizar el pago");
+    }
+  };
+
+  if (!isOpen || !payment) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-lg font-semibold mb-4">Editar Pago</h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Usuario
+            </label>
+            <input
+              type="text"
+              value={payment.full_name}
+              readOnly
+              className="w-full px-3 py-2 border rounded-md bg-gray-50"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Concepto
+            </label>
+            <select
+              value={formData.concept}
+              onChange={(e) => {
+                const concept = e.target.value as typeof formData.concept;
+                setFormData({
+                  ...formData,
+                  concept,
+                  amount: getConceptAmount(concept),
+                });
+              }}
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="Cuota mensual Muay Thai">
+                Cuota mensual Muay Thai
+              </option>
+              <option value="Cuota mensual MMA">Cuota mensual MMA</option>
+              <option value="Cuota mensual Muay Thai + MMA">
+                Cuota mensual Muay Thai + MMA
+              </option>
+              <option value="Matrícula">Matrícula</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Importe (€)
+            </label>
+            <input
+              type="number"
+              value={formData.amount}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  amount: parseFloat(e.target.value) || 0,
+                })
+              }
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+              min="0"
+              step="0.01"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Método de Pago
+            </label>
+            <select
+              value={formData.payment_method}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  payment_method: e.target
+                    .value as typeof formData.payment_method,
+                })
+              }
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="Efectivo">Efectivo</option>
+              <option value="Bizum">Bizum</option>
+              <option value="Transferencia">Transferencia</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Fecha de Pago
+            </label>
+            <input
+              type="date"
+              value={formData.payment_date}
+              onChange={(e) =>
+                setFormData({ ...formData, payment_date: e.target.value })
+              }
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit">Actualizar Pago</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 export default function UserDetailPage({
   params,
 }: {
@@ -95,6 +622,11 @@ export default function UserDetailPage({
   const [userPayments, setUserPayments] = useState<Tables<"payments">[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [showCreatePaymentDialog, setShowCreatePaymentDialog] = useState(false);
+  const [showPaymentOptions, setShowPaymentOptions] = useState(false);
+  const [showEditPaymentDialog, setShowEditPaymentDialog] = useState(false);
+  const [selectedPayment, setSelectedPayment] =
+    useState<Tables<"payments"> | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     first_surname: "",
@@ -397,6 +929,61 @@ export default function UserDetailPage({
     }
   };
 
+  const handleEditPayment = (payment: Tables<"payments">) => {
+    setSelectedPayment(payment);
+    setShowEditPaymentDialog(true);
+  };
+
+  const handleDeletePayment = async (payment: Tables<"payments">) => {
+    try {
+      const { error } = await supabase
+        .from("payments")
+        .delete()
+        .eq("id", payment.id);
+
+      if (error) throw error;
+
+      toast.success("Pago eliminado correctamente");
+
+      // Procesar automáticamente el estado del usuario después de eliminar un pago
+      try {
+        const { data: session } = await supabase.auth.getSession();
+        if (session.session) {
+          const response = await fetch(
+            `/api/payments/process-status?userId=${payment.user_id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${session.session.access_token}`,
+              },
+            }
+          );
+
+          if (response.ok) {
+            const result = await response.json();
+            if (result.statusChanged) {
+              toast.success(
+                `Estado del usuario actualizado a: ${
+                  result.newStatus === "active"
+                    ? "Activo"
+                    : result.newStatus === "pending"
+                    ? "Pendiente"
+                    : "Suspendido"
+                }`
+              );
+            }
+          }
+        }
+      } catch (statusError) {
+        console.error("Error updating user status:", statusError);
+      }
+
+      fetchUserData(); // Refresh user data
+    } catch (error) {
+      console.error("Error deleting payment:", error);
+      toast.error("Error al eliminar el pago");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -416,19 +1003,6 @@ export default function UserDetailPage({
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
-        {/* Header */}
-        <div className="mb-6">
-          <Link href="/users">
-            <Button variant="outline" size="sm" className="mb-4">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Volver a usuarios
-            </Button>
-          </Link>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Gestión de Usuario
-          </h1>
-        </div>
-
         {targetUser && (
           <>
             <Card className="mb-6">
@@ -437,87 +1011,103 @@ export default function UserDetailPage({
               </CardHeader>
               <CardContent>
                 {!isEditing ? (
-                  <div className="flex flex-col gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Email
-                      </label>
-                      <p className="text-gray-900">{targetUser.email}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Nombre
-                      </label>
-                      <p className="text-gray-900">
-                        {targetUser.name || "No especificado"}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Primer Apellido
-                      </label>
-                      <p className="text-gray-900">
-                        {targetUser.first_surname || "No especificado"}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Segundo Apellido
-                      </label>
-                      <p className="text-gray-900">
-                        {targetUser.second_surname || "No especificado"}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        DNI
-                      </label>
-                      <p className="text-gray-900">
-                        {targetUser.dni || "No especificado"}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Teléfono
-                      </label>
-                      <p className="text-gray-900">
-                        {targetUser.phone || "No especificado"}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Rol
-                      </label>
-                      <span className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-                        {targetUser.role === "admin"
-                          ? "Administrador"
-                          : targetUser.role === "staff"
-                          ? "Entrenador"
-                          : "Usuario"}
-                      </span>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Estado
-                      </label>
-                      <span
-                        className={`inline-block px-2 py-1 text-xs rounded-full ${
-                          targetUser.status === "suspended"
-                            ? "bg-red-100 text-red-800"
+                  <div className="space-y-6">
+                    {/* Datos del usuario */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 md:grid-rows-3 gap-4">
+                      {/* Email - Posición 1: col-span-2 col-start-1 row-start-2 */}
+                      <div className="col-span-2 md:col-span-2 md:col-start-1 md:row-start-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Email
+                        </label>
+                        <p className="text-gray-900">{targetUser.email}</p>
+                      </div>
+                      {/* Nombre - Posición 2: col-start-1 row-start-1 */}
+                      <div className=" md:col-start-1 md:row-start-1">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Nombre
+                        </label>
+                        <p className="text-gray-900">
+                          {targetUser.name || "No especificado"}
+                        </p>
+                      </div>
+                      {/* Primer Apellido - Posición 3: col-start-2 row-start-1 */}
+                      <div className=" md:col-start-2 md:row-start-1">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Primer Apellido
+                        </label>
+                        <p className="text-gray-900">
+                          {targetUser.first_surname || "No especificado"}
+                        </p>
+                      </div>
+                      {/* Segundo Apellido - Posición 4: col-start-3 row-start-1 */}
+                      <div className="md:col-start-3 md:row-start-1">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Segundo Apellido
+                        </label>
+                        <p className="text-gray-900">
+                          {targetUser.second_surname || "No especificado"}
+                        </p>
+                      </div>
+                      {/* DNI - Posición 5: col-start-1 row-start-3 */}
+                      <div className="md:col-start-1 md:row-start-3">
+                        <label className="block text-sm font-medium text-gray-700">
+                          DNI
+                        </label>
+                        <p className="text-gray-900">
+                          {targetUser.dni || "No especificado"}
+                        </p>
+                      </div>
+                      {/* Teléfono - Posición 6: col-start-2 row-start-3 */}
+                      <div className="md:col-start-2 md:row-start-3">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Teléfono
+                        </label>
+                        <p className="text-gray-900">
+                          {targetUser.phone || "No especificado"}
+                        </p>
+                      </div>
+                      {/* Estado - Posición 7: col-start-3 row-start-3 */}
+                      <div className="md:col-start-3 md:row-start-3">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Estado
+                        </label>
+                        <span
+                          className={`inline-block px-2 py-1 text-xs rounded-full ${
+                            targetUser.status === "suspended"
+                              ? "bg-red-100 text-red-800"
+                              : targetUser.status === "pending"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-green-100 text-green-800"
+                          }`}
+                        >
+                          {targetUser.status === "suspended"
+                            ? "Suspendido"
                             : targetUser.status === "pending"
-                            ? "bg-yellow-100 text-yellow-800"
-                            : "bg-green-100 text-green-800"
-                        }`}
-                      >
-                        {targetUser.status === "suspended"
-                          ? "Suspendido"
-                          : targetUser.status === "pending"
-                          ? "Pendiente de Pago"
-                          : "Activo"}
-                      </span>
+                            ? "Pendiente de Pago"
+                            : "Activo"}
+                        </span>
+                      </div>
+                      {/* Rol - Posición 8: col-start-3 row-start-2 */}
+                      <div className="md:col-start-3 md:row-start-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Rol
+                        </label>
+                        <span className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                          {targetUser.role === "admin"
+                            ? "Administrador"
+                            : targetUser.role === "staff"
+                            ? "Staff"
+                            : "Usuario"}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button onClick={() => setIsEditing(true)}>
+
+                    {/* Botones de acción */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <Button
+                        onClick={() => setIsEditing(true)}
+                        className="md:col-span-2"
+                      >
                         Editar datos
                       </Button>
                       {/* Si es el propio usuario, mostrar botón para cambiar contraseña */}
@@ -529,7 +1119,7 @@ export default function UserDetailPage({
                           Cambiar mi contraseña
                         </Button>
                       )}
-                      {targetUser.role !== "admin" && (
+                      {targetUser.role !== "admin" && isAdmin && (
                         <Button variant="outline" onClick={handleRoleChange}>
                           {targetUser.role === "staff"
                             ? "Quitar permisos de staff"
@@ -680,7 +1270,18 @@ export default function UserDetailPage({
             {/* Historial de pagos */}
             <Card>
               <CardHeader>
-                <CardTitle>Historial de Pagos</CardTitle>
+                <div className="flex justify-between items-center">
+                  <CardTitle>Historial de Pagos</CardTitle>
+                  {(isAdmin || isStaff) && (
+                    <Button
+                      onClick={() => setShowCreatePaymentDialog(true)}
+                      size="sm"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Crear Pago
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {userPayments.length === 0 ? (
@@ -695,7 +1296,11 @@ export default function UserDetailPage({
                     {userPayments.map((payment) => (
                       <div
                         key={payment.id}
-                        className="flex justify-between items-center p-4 border rounded-lg"
+                        className="flex justify-between items-center p-4 border rounded-lg cursor-pointer hover:shadow-md transition-shadow"
+                        onClick={() => {
+                          setSelectedPayment(payment);
+                          setShowPaymentOptions(true);
+                        }}
                       >
                         <div>
                           <p className="font-medium">{payment.concept}</p>
@@ -726,6 +1331,30 @@ export default function UserDetailPage({
         isOpen={showPasswordDialog}
         onClose={() => setShowPasswordDialog(false)}
         onConfirm={handleOwnPasswordReset}
+      />
+
+      {/* Dialog para crear pago */}
+      <CreatePaymentDialog
+        isOpen={showCreatePaymentDialog}
+        onClose={() => setShowCreatePaymentDialog(false)}
+        targetUser={targetUser}
+      />
+
+      {/* Dialog de opciones de pago */}
+      <PaymentOptionsDialog
+        isOpen={showPaymentOptions}
+        onClose={() => setShowPaymentOptions(false)}
+        payment={selectedPayment}
+        onEdit={handleEditPayment}
+        onDelete={handleDeletePayment}
+      />
+
+      {/* Dialog para editar pago */}
+      <EditPaymentDialog
+        isOpen={showEditPaymentDialog}
+        onClose={() => setShowEditPaymentDialog(false)}
+        payment={selectedPayment}
+        onSave={fetchUserData}
       />
     </div>
   );

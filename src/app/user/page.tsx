@@ -6,9 +6,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import Link from "next/link";
-import { ArrowLeft, Key, Mail } from "lucide-react";
-import type { Tables } from "@/lib/supabase";
+import { Key, Mail } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -139,17 +137,7 @@ export default function UserProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-2xl mx-auto px-4">
-        {/* Header */}
-        <div className="flex flex-row justify-evenly mb-2">
-          <Link href="/">
-            <Button variant="outline" size="sm" className="mb-4">
-              <ArrowLeft className="h-4 w-4" />
-              Volver
-            </Button>
-          </Link>
-          <h1 className="text-3xl font-bold text-gray-900">Mi Perfil</h1>
-        </div>
+      <div className="max-w-6xl mx-auto px-4">
         <Card>
           <CardHeader>
             <CardTitle>Información Personal</CardTitle>
@@ -211,7 +199,7 @@ export default function UserProfilePage() {
                     {profile?.role === "admin"
                       ? "Administrador"
                       : profile?.role === "staff"
-                      ? "Entrenador"
+                      ? "Staff"
                       : "Usuario"}
                   </span>
                 </div>

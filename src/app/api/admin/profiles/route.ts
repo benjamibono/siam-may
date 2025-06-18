@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { supabase } from "@/lib/supabase";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Verificar que el usuario esté autenticado y sea admin
     const {

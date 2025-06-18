@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { withRateLimit, getUserIdentifier } from "@/lib/rate-limit";
 
 // Cliente con service role key para operaciones admin
 const supabaseAdmin = createClient(
@@ -48,16 +49,14 @@ async function verifyAdminOrStaff(request: NextRequest) {
     if (profile?.role !== "admin" && profile?.role !== "staff") return null;
 
     return user;
-  } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (_error) {
     return null;
   }
 }
 
 // POST - Enviar email de reset de password
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+async function postHandler(request: NextRequest): Promise<NextResponse> {
   const user = await verifyAdminOrStaff(request);
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -86,3 +85,8 @@ export async function POST(
     );
   }
 }
+
+export const POST = withRateLimit(
+  "PASSWORD_CHANGE",
+  getUserIdentifier
+)(postHandler);

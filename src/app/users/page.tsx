@@ -3,30 +3,33 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
-import { Button } from "@/components/ui/button";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Search, Shield, User } from "lucide-react";
+import { Search, Shield, User } from "lucide-react";
 import type { Tables } from "@/lib/supabase";
 
 export default function UsersPage() {
-  const { user, isLoading, isAdmin } = useProfile();
+  const { user, isLoading, isAdmin, isStaff } = useProfile();
   const router = useRouter();
   const [users, setUsers] = useState<Tables<"profiles">[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState<
+    "all" | "active" | "pending" | "suspended"
+  >("all");
 
   useEffect(() => {
     if (!isLoading) {
-      if (!user || !isAdmin) {
+      if (!user || (!isAdmin && !isStaff)) {
         router.push("/");
         return;
       }
       fetchUsers();
     }
-  }, [user, isAdmin, isLoading, router]);
+  }, [user, isAdmin, isStaff, isLoading, router]);
 
   const fetchUsers = async () => {
     try {
@@ -64,15 +67,77 @@ export default function UsersPage() {
     }
   };
 
-  const filteredUsers = users.filter(
+  // Filtrar usuarios excluyendo el usuario actual
+  const usersExcludingCurrent = users.filter((u) => u.id !== user?.id);
+
+  // Contar usuarios por status
+  const totalUsers = usersExcludingCurrent.length;
+  const activeUsers = usersExcludingCurrent.filter(
+    (u) => u.status === "active"
+  ).length;
+  const pendingUsers = usersExcludingCurrent.filter(
+    (u) => u.status === "pending"
+  ).length;
+  const suspendedUsers = usersExcludingCurrent.filter(
+    (u) => u.status === "suspended"
+  ).length;
+
+  // Filtrar por búsqueda y tipo
+  let filteredUsers = usersExcludingCurrent.filter(
     (u) =>
-      u.id !== user?.id && // Excluir el usuario actual
-      (u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.first_surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.second_surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.dni?.toLowerCase().includes(searchTerm.toLowerCase()))
+      u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.first_surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.second_surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.dni?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Aplicar filtro por tipo
+  if (filterType !== "all") {
+    filteredUsers = filteredUsers.filter((u) => u.status === filterType);
+  }
+
+  // Ordenar usuarios según el filtro activo
+  filteredUsers.sort((a, b) => {
+    if (filterType === "all") return 0;
+    if (
+      filterType === "active" &&
+      a.status === "active" &&
+      b.status !== "active"
+    )
+      return -1;
+    if (
+      filterType === "active" &&
+      a.status !== "active" &&
+      b.status === "active"
+    )
+      return 1;
+    if (
+      filterType === "pending" &&
+      a.status === "pending" &&
+      b.status !== "pending"
+    )
+      return -1;
+    if (
+      filterType === "pending" &&
+      a.status !== "pending" &&
+      b.status === "pending"
+    )
+      return 1;
+    if (
+      filterType === "suspended" &&
+      a.status === "suspended" &&
+      b.status !== "suspended"
+    )
+      return -1;
+    if (
+      filterType === "suspended" &&
+      a.status !== "suspended" &&
+      b.status === "suspended"
+    )
+      return 1;
+    return 0;
+  });
 
   const getRoleIcon = (role: string) => {
     switch (role) {
@@ -90,7 +155,7 @@ export default function UsersPage() {
       case "admin":
         return "Administrador";
       case "staff":
-        return "Entrenador";
+        return "Staff";
       default:
         return "Usuario";
     }
@@ -104,7 +169,7 @@ export default function UsersPage() {
     );
   }
 
-  if (!user || !isAdmin) {
+  if (!user || (!isAdmin && !isStaff)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div>No tienes permisos para acceder a esta página</div>
@@ -113,25 +178,74 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-6xl mx-auto px-4">
-        {/* Header */}
-        <div className="flex flex-row justify-between mb-2">
-          <Link href="/">
-            <Button variant="outline" size="sm" className="mb-4">
-              <ArrowLeft className="h-4 w-4" />
-              Volver
-              </Button>
-          </Link>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Gestión de Usuarios
-          </h1>
+    <div className="min-h-screen bg-gray-50 py-4">
+      <div className="max-w-6xl mx-auto px-2">
+        {/* Cards estadísticas */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
+          <Card
+            className={`cursor-pointer transition-all hover:shadow-md ${
+              filterType === "all"
+                ? "ring-2 ring-blue-500 bg-blue-50"
+                : "hover:bg-gray-50"
+            }`}
+            onClick={() => setFilterType("all")}
+          >
+            <CardContent className="text-center">
+              <div className="text-xl font-bold text-gray-800">
+                {totalUsers}
+              </div>
+              <div className="text-sm text-gray-600">Total Usuarios</div>
+            </CardContent>
+          </Card>
+
+          <Card
+            className={`cursor-pointer transition-all hover:shadow-md ${
+              filterType === "active"
+                ? "ring-2 ring-green-500 bg-green-50"
+                : "hover:bg-gray-50"
+            }`}
+            onClick={() => setFilterType("active")}
+          >
+            <CardContent className="text-center">
+              <div className="text-xl font-bold text-green-600">
+                {activeUsers}
+              </div>
+              <div className="text-sm text-gray-600">Activos</div>
+            </CardContent>
+          </Card>
+
+          <Card
+            className={`cursor-pointer transition-all hover:shadow-md ${
+              filterType === "pending"
+                ? "ring-2 ring-yellow-500 bg-yellow-50"
+                : "hover:bg-gray-50"
+            }`}
+            onClick={() => setFilterType("pending")}
+          >
+            <CardContent className="text-center">
+              <div className="text-xl font-bold text-yellow-600">
+                {pendingUsers}
+              </div>
+              <div className="text-sm text-gray-600">Pendientes</div>
+            </CardContent>
+          </Card>
+
+          <Card
+            className={`cursor-pointer transition-all hover:shadow-md ${
+              filterType === "suspended"
+                ? "ring-2 ring-red-500 bg-red-50"
+                : "hover:bg-gray-50"
+            }`}
+            onClick={() => setFilterType("suspended")}
+          >
+            <CardContent className="text-center">
+              <div className="text-xl font-bold text-red-600">
+                {suspendedUsers}
+              </div>
+              <div className="text-sm text-gray-600">Suspendidos</div>
+            </CardContent>
+          </Card>
         </div>
-          <div className="flex flex-row justify-between">
-            <p className="text-gray-600 mt-2">
-              Total de usuarios: {users.filter((u) => u.id !== user?.id).length}
-            </p>
-          </div>
 
         {/* Búsqueda */}
         <Card className="mb-6">
@@ -150,73 +264,52 @@ export default function UsersPage() {
         </Card>
 
         {/* Lista de usuarios con mayor separación */}
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-2">
           {filteredUsers.map((userItem) => (
             <Link key={userItem.id} href={`/user/${userItem.id}`}>
               <Card className="hover:bg-gray-50 transition-colors cursor-pointer hover:shadow-md">
-                <CardContent className="py-6">
-                  <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-3">
-                        {getRoleIcon(userItem.role)}
-                        <h3 className="font-semibold text-lg">
-                          {userItem.name && userItem.first_surname
-                            ? `${userItem.name} ${userItem.first_surname} ${
-                                userItem.second_surname || ""
-                              }`
-                            : userItem.email}
-                        </h3>
-                        <span
-                          className={`px-2 py-1 text-xs rounded-full ${
-                            userItem.role === "admin"
-                              ? "bg-red-100 text-red-800"
-                              : userItem.role === "staff"
-                              ? "bg-blue-100 text-blue-800"
-                              : "bg-gray-100 text-gray-800"
-                          }`}
-                        >
-                          {getRoleText(userItem.role)}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm text-gray-600">
-                        <div>
-                          <span className="font-medium">Email:</span>{" "}
-                          {userItem.email}
-                        </div>
-                        {userItem.dni && (
-                          <div>
-                            <span className="font-medium">DNI:</span>{" "}
-                            {userItem.dni}
-                          </div>
-                        )}
-                        {userItem.phone && (
-                          <div>
-                            <span className="font-medium">Teléfono:</span>{" "}
-                            {userItem.phone}
-                          </div>
-                        )}
-                        <div>
-                          <span className="font-medium">Registrado:</span>{" "}
-                          {new Date(userItem.created_at).toLocaleDateString()}
-                        </div>
-                        <div>
-                          <span
-                            className={`inline-block px-2 py-1 text-xs rounded-full ${
-                              userItem.status === "active"
-                                ? "bg-green-100 text-green-800"
-                                : userItem.status === "pending"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : "bg-red-100 text-red-800"
-                            }`}
-                          >
-                            {userItem.status === "active"
-                              ? "Activo"
-                              : userItem.status === "pending"
-                              ? "Pendiente de Pago"
-                              : "Suspendido"}
-                          </span>
-                        </div>
-                      </div>
+                <CardContent className="py-2">
+                  <div className="flex flex-col gap-2">
+                    {/* Primera línea: icono y nombre completo */}
+                    <div className="flex items-center gap-2">
+                      {getRoleIcon(userItem.role)}
+                      <h3 className="font-semibold text-lg">
+                        {userItem.name && userItem.first_surname
+                          ? `${userItem.name} ${userItem.first_surname} ${
+                              userItem.second_surname || ""
+                            }`
+                          : userItem.email}
+                      </h3>
+                    </div>
+
+                    {/* Segunda línea: role y status */}
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`px-2 py-1 text-xs rounded-full ${
+                          userItem.role === "admin"
+                            ? "bg-red-100 text-red-800"
+                            : userItem.role === "staff"
+                            ? "bg-blue-100 text-blue-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {getRoleText(userItem.role)}
+                      </span>
+                      <span
+                        className={`px-2 py-1 text-xs rounded-full ${
+                          userItem.status === "active"
+                            ? "bg-green-100 text-green-800"
+                            : userItem.status === "pending"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {userItem.status === "active"
+                          ? "Activo"
+                          : userItem.status === "pending"
+                          ? "Pendiente de Pago"
+                          : "Suspendido"}
+                      </span>
                     </div>
                   </div>
                 </CardContent>

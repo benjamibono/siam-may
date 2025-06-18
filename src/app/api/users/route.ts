@@ -58,7 +58,8 @@ async function verifyAdmin(request: NextRequest) {
     if (profile?.role !== "admin") return null;
 
     return user;
-  } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (_error) {
     return null;
   }
 }

@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:reset": "node test-reset-logic.mjs",
+    "test:reset:dev": "node test-reset-logic.mjs 3000",
+    "reset:classes": "curl -X GET 'http://localhost:3000/api/cron/reset-classes' -H 'Authorization: Bearer mi-secreto-super-seguro'"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.14",
@@ -19,6 +22,7 @@
     "cmdk": "^1.1.1",
     "lucide-react": "^0.515.0",
     "next": "15.3.3",
+    "node-cache": "^5.1.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.57.0",

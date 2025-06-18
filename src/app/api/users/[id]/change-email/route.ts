@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { withRateLimit, getUserIdentifier } from "@/lib/rate-limit";
 
 // Cliente con service role key para operaciones admin
 const supabaseAdmin = createClient(
@@ -48,23 +49,24 @@ async function verifyAdminOrStaff(request: NextRequest) {
     if (profile?.role !== "admin" && profile?.role !== "staff") return null;
 
     return user;
-  } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (_error) {
     return null;
   }
 }
 
 // POST - Cambiar email de usuario
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+async function postHandler(request: NextRequest): Promise<NextResponse> {
   const user = await verifyAdminOrStaff(request);
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
   try {
-    const { id } = await params;
+    // Extraer ID del URL
+    const url = new URL(request.url);
+    const pathSegments = url.pathname.split("/");
+    const id = pathSegments[pathSegments.length - 2]; // El ID está antes de 'change-email'
     const { newEmail } = await request.json();
 
     // Usar el cliente admin para actualizar el email directamente
@@ -95,3 +97,8 @@ export async function POST(
     );
   }
 }
+
+export const POST = withRateLimit(
+  "EMAIL_CHANGE",
+  getUserIdentifier
+)(postHandler);

@@ -10,24 +10,24 @@ export interface Database {
   public: {
     Tables: {
       [key: string]: {
-        Row: {};
-        Insert: {};
-        Update: {};
+        Row: Record<string, unknown>;
+        Insert: Record<string, unknown>;
+        Update: Record<string, unknown>;
       };
     };
     Views: {
       [key: string]: {
-        Row: {};
+        Row: Record<string, unknown>;
       };
     };
     Functions: {
       [key: string]: {
-        Args: {};
-        Returns: {};
+        Args: Record<string, unknown>;
+        Returns: unknown;
       };
     };
     Enums: {
-      [key: string]: {};
+      [key: string]: Record<string, unknown>;
     };
   };
 }

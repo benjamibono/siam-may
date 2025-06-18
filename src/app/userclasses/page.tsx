@@ -6,15 +6,20 @@ import { useProfile } from "@/hooks/useProfile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import Link from "next/link";
-import { ArrowLeft, BookOpen, Calendar, Users } from "lucide-react";
-import type { Tables } from "@/lib/supabase";
-import { getNextClassDay } from "@/lib/class-schedule";
+import Image from "next/image";
 import {
-  canEnrollInClasses,
-  getEnrollmentStatusMessage,
-  canEnrollInClassType,
-  getClassRestrictionMessage,
+  Calendar,
+  Users,
+  Clock,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
+import type { Tables } from "@/lib/supabase";
+import {
+  // canEnrollInClasses, // Unused import
+  // getEnrollmentStatusMessage, // Unused import
+  // canEnrollInClassType, // Unused import
+  // getClassRestrictionMessage, // Unused import
   getCurrentMonthYear,
 } from "@/lib/payment-logic";
 
@@ -23,16 +28,150 @@ interface ClassWithEnrollment extends Tables<"classes"> {
   enrollment_count: number;
 }
 
+// Función para obtener el icono apropiado según el tipo de clase
+const getClassIcon = (className: string, description?: string) => {
+  // Primero verificar condiciones de descripción
+  if (description && description.toLowerCase().includes("bjj")) {
+    return { src: "/lock.png", alt: "BJJ" };
+  }
+  if (description && description.toLowerCase().includes("sparring")) {
+    return { src: "/opponent.png", alt: "Sparring" };
+  }
+  // Luego verificar nombre de clase
+  if (className === "Muay Thai") {
+    return { src: "/shield.png", alt: "Muay Thai" };
+  }
+  if (className === "MMA") {
+    return { src: "/gym.png", alt: "MMA" };
+  }
+  // Icono por defecto
+  return { src: "/gym.png", alt: "Clase" };
+};
+
+// Función para parsear el horario de clases
+const parseSchedule = (schedule: string) => {
+  if (!schedule) return { days: [], start: "", end: "" };
+
+  // Intentar parsear el formato "Lunes, Miércoles 19:00-20:30"
+  const match = schedule.match(/^(.+?)\s+(\d{2}:\d{2})-(\d{2}:\d{2})$/);
+  if (match) {
+    const [, daysStr, start, end] = match;
+    const days = daysStr.split(/,\s*(?:y\s+)?/);
+    return { days, start, end };
+  }
+
+  return { days: [], start: "", end: "" };
+};
+
+// Función para formatear solo los días
+const formatDaysOnly = (days: string[]) => {
+  if (days.length === 0) return "Sin días definidos";
+  if (days.length === 1) return days[0];
+  if (days.length === 2) return `${days[0]} y ${days[1]}`;
+  return `${days.slice(0, -1).join(", ")} y ${days[days.length - 1]}`;
+};
+
 // Función para manejar inscripciones con validaciones
 
 export default function UserClassesPage() {
   const { user, profile, isLoading } = useProfile();
   const [classes, setClasses] = useState<ClassWithEnrollment[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
-  const [lastPayment, setLastPayment] = useState<{
+  const [, setLastPayment] = useState<{
     concept: string;
     payment_date: string;
   } | null>(null);
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(
+    new Set()
+  );
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
+
+  const filterOptions = [
+    { id: "MMA", label: "MMA" },
+    { id: "Muay Thai", label: "Thai" },
+    { id: "Mañana", label: "Mañana" },
+    { id: "Tarde", label: "Tarde" },
+    { id: "Niños", label: "Niños" },
+  ];
+
+  const toggleFilter = (filterId: string) => {
+    setActiveFilters((prev) =>
+      prev.includes(filterId)
+        ? prev.filter((f) => f !== filterId)
+        : [...prev, filterId]
+    );
+  };
+
+  const isTimeInRange = (timeStr: string, range: "morning" | "afternoon") => {
+    if (!timeStr) return false;
+    const [hours] = timeStr.split(":").map(Number);
+    if (range === "morning") {
+      return hours >= 0 && hours < 14;
+    } else {
+      return hours >= 14 && hours < 24;
+    }
+  };
+
+  const sortClasses = (classes: ClassWithEnrollment[]) => {
+    return classes.sort((a, b) => {
+      // Primero ordenar por nombre
+      const nameComparison = a.name.localeCompare(b.name);
+      if (nameComparison !== 0) return nameComparison;
+
+      // Si tienen el mismo nombre, ordenar por hora de inicio
+      const parsedA = parseSchedule(a.schedule);
+      const parsedB = parseSchedule(b.schedule);
+
+      if (!parsedA.start && !parsedB.start) return 0;
+      if (!parsedA.start) return 1;
+      if (!parsedB.start) return -1;
+
+      return parsedA.start.localeCompare(parsedB.start);
+    });
+  };
+
+  const filterClasses = (classes: ClassWithEnrollment[]) => {
+    if (activeFilters.length === 0) return sortClasses(classes);
+
+    const filtered = classes.filter((classItem) => {
+      const parsed = parseSchedule(classItem.schedule);
+
+      return activeFilters.every((filter) => {
+        switch (filter) {
+          case "MMA":
+            return classItem.name.toLowerCase().includes("mma");
+          case "Muay Thai":
+            return classItem.name.toLowerCase().includes("muay thai");
+          case "Mañana":
+            return isTimeInRange(parsed.start, "morning");
+          case "Tarde":
+            return isTimeInRange(parsed.start, "afternoon");
+          case "Niños":
+            return (
+              classItem.name.toLowerCase().includes("niños") ||
+              (classItem.description &&
+                classItem.description.toLowerCase().includes("niños"))
+            );
+          default:
+            return true;
+        }
+      });
+    });
+
+    return sortClasses(filtered);
+  };
+
+  const toggleDescription = (classId: string) => {
+    setExpandedDescriptions((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(classId)) {
+        newSet.delete(classId);
+      } else {
+        newSet.add(classId);
+      }
+      return newSet;
+    });
+  };
 
   useEffect(() => {
     if (user) {
@@ -62,8 +201,8 @@ export default function UserClassesPage() {
       if (error) throw error;
 
       setLastPayment(payments && payments.length > 0 ? payments[0] : null);
-    } catch (error) {
-      console.error("Error fetching last payment:", error);
+    } catch {
+      // Removed console.error and unused error variable
     }
   };
 
@@ -71,48 +210,43 @@ export default function UserClassesPage() {
     if (!user) return;
 
     try {
-      // Obtener todas las clases
-      const { data: allClasses, error: classesError } = await supabase
-        .from("classes")
-        .select("*");
-
-      if (classesError) throw classesError;
-
-      // Obtener las inscripciones del usuario
-      const { data: enrollments, error: enrollmentsError } = await supabase
-        .from("class_enrollments")
-        .select("class_id")
-        .eq("user_id", user.id);
-
-      if (enrollmentsError) throw enrollmentsError;
-
-      const enrolledClassIds = enrollments?.map((e) => e.class_id) || [];
-
-      // Obtener el conteo de inscripciones para cada clase
-      const classesWithEnrollment: ClassWithEnrollment[] = [];
-
-      if (allClasses) {
-        for (const cls of allClasses) {
-          const { count, error: countError } = await supabase
+      // Obtener todas las clases y las inscripciones del usuario en paralelo
+      const [classesResult, enrollmentsResult, allEnrollmentsResult] =
+        await Promise.all([
+          supabase.from("classes").select("*"),
+          supabase
             .from("class_enrollments")
-            .select("*", { count: "exact", head: true })
-            .eq("class_id", cls.id);
+            .select("class_id")
+            .eq("user_id", user.id),
+          supabase.from("class_enrollments").select("class_id"),
+        ]);
 
-          if (countError) {
-            console.error("Error counting enrollments:", countError);
-          }
+      if (classesResult.error) throw classesResult.error;
+      if (enrollmentsResult.error) throw enrollmentsResult.error;
+      if (allEnrollmentsResult.error) throw allEnrollmentsResult.error;
 
-          classesWithEnrollment.push({
-            ...cls,
-            is_enrolled: enrolledClassIds.includes(cls.id),
-            enrollment_count: count || 0,
-          });
-        }
-      }
+      const enrolledClassIds =
+        enrollmentsResult.data?.map((e) => e.class_id) || [];
+
+      // Contar inscripciones por clase de forma eficiente
+      const enrollmentCounts =
+        allEnrollmentsResult.data?.reduce((acc, enrollment) => {
+          acc[enrollment.class_id] = (acc[enrollment.class_id] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>) || {};
+
+      // Crear el array final con toda la información
+      const classesWithEnrollment: ClassWithEnrollment[] = (
+        classesResult.data || []
+      ).map((cls) => ({
+        ...cls,
+        is_enrolled: enrolledClassIds.includes(cls.id),
+        enrollment_count: enrollmentCounts[cls.id] || 0,
+      }));
 
       setClasses(classesWithEnrollment);
-    } catch (error) {
-      console.error("Error fetching classes:", error);
+    } catch {
+      // Removed console.error and unused error variable
       toast.error("Error al cargar las clases");
     } finally {
       setLoadingClasses(false);
@@ -122,55 +256,109 @@ export default function UserClassesPage() {
   const handleEnrollment = async (
     classId: string,
     isEnrolled: boolean,
-    className: string
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _className: string
   ) => {
     if (!user || !profile) return;
 
+    const { handleEnrollment: handleEnrollmentApi } = await import(
+      "@/lib/enrollment-api"
+    );
+
     try {
-      if (isEnrolled) {
-        // Desinscribirse (siempre permitido)
-        const { error } = await supabase
-          .from("class_enrollments")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("class_id", classId);
+      const action = isEnrolled ? "unenroll" : "enroll";
+      const result = await handleEnrollmentApi(action, classId);
 
-        if (error) throw error;
-        toast.success("Te has desinscrito de la clase");
+      if (result.success) {
+        toast.success(
+          result.message ||
+            (isEnrolled
+              ? "Te has desinscrito de la clase"
+              : "Te has inscrito a la clase")
+        );
+        // Actualizar la lista
+        fetchClasses();
       } else {
-        // Verificar si puede inscribirse según el estado
-        if (!canEnrollInClasses(profile.status)) {
-          const message = getEnrollmentStatusMessage(profile.status);
-          toast.error(message);
-          return;
-        }
-
-        // Verificar si puede inscribirse según el tipo de pago
-        if (!canEnrollInClassType(className, lastPayment?.concept || null)) {
-          const message = getClassRestrictionMessage(
-            className,
-            lastPayment?.concept || null
-          );
-          toast.error(message);
-          return;
-        }
-
-        // Inscribirse
-        const { error } = await supabase.from("class_enrollments").insert({
-          user_id: user.id,
-          class_id: classId,
-        });
-
-        if (error) throw error;
-        toast.success("Te has inscrito a la clase");
+        toast.error(result.error || "Error al procesar la inscripción");
       }
-
-      // Actualizar la lista
-      fetchClasses();
     } catch (error) {
-      console.error("Error with enrollment:", error);
+      console.error("Error al procesar inscripción:", error);
       toast.error("Error al procesar la inscripción");
     }
+  };
+
+  const renderClassCard = (cls: ClassWithEnrollment, isEnrolled: boolean) => {
+    const parsed = parseSchedule(cls.schedule);
+    const icon = getClassIcon(cls.name, cls.description || undefined);
+    const isDescriptionExpanded = expandedDescriptions.has(cls.id);
+
+    return (
+      <Card
+        key={cls.id}
+        className={isEnrolled ? "border-green-200 bg-green-50" : ""}
+      >
+        <CardHeader className="pb-1">
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Image src={icon.src} alt={icon.alt} width={24} height={24} />
+              <span className="text-base">{cls.name}</span>
+            </div>
+            <div className="flex items-center gap-1 text-sm text-gray-600">
+              <Clock className="h-4 w-4" />
+              {parsed.start && parsed.end
+                ? `${parsed.start} - ${parsed.end}`
+                : "Sin horario"}
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0 flex flex-col gap-3">
+          <div className="flex items-center justify-between text-sm text-gray-600">
+            <div className="flex items-center gap-1">
+              <Calendar className="h-4 w-4" />
+              {formatDaysOnly(parsed.days)}
+            </div>
+            <div className="flex items-center gap-1">
+              <Users className="h-4 w-4" />
+              {cls.enrollment_count}/{cls.capacity}
+            </div>
+          </div>
+
+          {cls.description && (
+            <div className="border-t pt-2">
+              <button
+                onClick={() => toggleDescription(cls.id)}
+                className="flex items-center gap-1 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors w-full text-left"
+              >
+                {isDescriptionExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+                Descripción
+              </button>
+              {isDescriptionExpanded && (
+                <p className="text-sm text-gray-600 mt-2 pl-5">
+                  {cls.description}
+                </p>
+              )}
+            </div>
+          )}
+
+          <Button
+            variant={isEnrolled ? "outline" : "default"}
+            onClick={() => handleEnrollment(cls.id, isEnrolled, cls.name)}
+            className="w-full"
+            disabled={!isEnrolled && cls.enrollment_count >= cls.capacity}
+          >
+            {isEnrolled
+              ? "Desinscribirse"
+              : cls.enrollment_count >= cls.capacity
+              ? "Clase Llena"
+              : "Inscribirse"}
+          </Button>
+        </CardContent>
+      </Card>
+    );
   };
 
   if (isLoading || loadingClasses) {
@@ -192,66 +380,68 @@ export default function UserClassesPage() {
   const enrolledClasses = classes.filter((cls) => cls.is_enrolled);
   const availableClasses = classes.filter((cls) => !cls.is_enrolled);
 
+  // Apply filters to both enrolled and available classes
+  const filteredEnrolledClasses = filterClasses(enrolledClasses);
+  const filteredAvailableClasses = filterClasses(availableClasses);
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
-        {/* Header */}
+        {/* Filtros */}
         <div className="mb-6">
-          <Link href="/">
-            <Button variant="outline" size="sm" className="mb-4">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-            </Button>
-          </Link>
-          <h1 className="text-3xl font-bold text-gray-900">Mis Clases</h1>
+          <div className="flex gap-2 items-center flex-balance">
+            {filterOptions.map((option) => (
+              <button
+                key={option.id}
+                onClick={() => toggleFilter(option.id)}
+                className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+                  activeFilters.includes(option.id)
+                    ? "bg-blue-500 text-white border-blue-500"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+            {activeFilters.length > 0 && (
+              <button
+                onClick={() => setActiveFilters([])}
+                className="px-3 py-1 text-sm text-gray-500 hover:text-gray-700 underline"
+              >
+                Limpiar filtros
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid gap-8">
           {/* Clases Inscritas */}
           <div>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-4">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">
               Clases en las que estás inscrito
             </h2>
-            {enrolledClasses.length === 0 ? (
+            {filteredEnrolledClasses.length === 0 ? (
               <Card>
-                <CardContent className="py-8 text-center">
-                  <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <CardContent className="py-2 text-center">
+                  <Image
+                    src="/sport.png"
+                    alt="Sport"
+                    width={30}
+                    height={30}
+                    className="mx-auto mb-4"
+                  />
                   <p className="text-gray-500">
-                    No estás inscrito en ninguna clase aún.
+                    {enrolledClasses.length === 0
+                      ? "No estás inscrito en ninguna clase aún."
+                      : "No hay clases inscritas que coincidan con los filtros seleccionados."}
                   </p>
                 </CardContent>
               </Card>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                {enrolledClasses.map((cls) => (
-                  <Card key={cls.id} className="border-green-200 bg-green-50">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <BookOpen className="h-5 w-5" />
-                        {cls.name}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-col gap-3">
-                      {cls.description && (
-                        <p className="text-gray-600">{cls.description}</p>
-                      )}
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Calendar className="h-4 w-4" />
-                        {getNextClassDay(cls.schedule)}
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Users className="h-4 w-4" />
-                        {cls.enrollment_count}/{cls.capacity} inscritos
-                      </div>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleEnrollment(cls.id, true, cls.name)}
-                        className="w-full"
-                      >
-                        Desinscribirse
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
+                {filteredEnrolledClasses.map((cls) =>
+                  renderClassCard(cls, true)
+                )}
               </div>
             )}
           </div>
@@ -261,50 +451,28 @@ export default function UserClassesPage() {
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">
               Clases disponibles
             </h2>
-            {availableClasses.length === 0 ? (
+            {filteredAvailableClasses.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-center">
+                  <Image
+                    src="/gym.png"
+                    alt="Gym"
+                    width={30}
+                    height={30}
+                    className="mx-auto mb-4"
+                  />
                   <p className="text-gray-500">
-                    No hay clases disponibles para inscribirse.
+                    {availableClasses.length === 0
+                      ? "No hay clases disponibles para inscribirse."
+                      : "No hay clases disponibles que coincidan con los filtros seleccionados."}
                   </p>
                 </CardContent>
               </Card>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                {availableClasses.map((cls) => (
-                  <Card key={cls.id}>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <BookOpen className="h-5 w-5" />
-                        {cls.name}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-col gap-3">
-                      {cls.description && (
-                        <p className="text-gray-600">{cls.description}</p>
-                      )}
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Calendar className="h-4 w-4" />
-                        {getNextClassDay(cls.schedule)}
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Users className="h-4 w-4" />
-                        {cls.enrollment_count}/{cls.capacity} inscritos
-                      </div>
-                      <Button
-                        onClick={() =>
-                          handleEnrollment(cls.id, false, cls.name)
-                        }
-                        className="w-full"
-                        disabled={cls.enrollment_count >= cls.capacity}
-                      >
-                        {cls.enrollment_count >= cls.capacity
-                          ? "Clase Llena"
-                          : "Inscribirse"}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
+                {filteredAvailableClasses.map((cls) =>
+                  renderClassCard(cls, false)
+                )}
               </div>
             )}
           </div>

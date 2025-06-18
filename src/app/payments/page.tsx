@@ -6,8 +6,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import Link from "next/link";
-import { ArrowLeft, CreditCard, Plus, Edit, Trash, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import type { Tables } from "@/lib/supabase";
 import {
   Command,
@@ -28,8 +27,82 @@ interface UserOption {
   email: string;
 }
 
+// Componente Dialog para opciones de pago (editar/eliminar)
+const PaymentOptionsDialog = ({
+  isOpen,
+  onClose,
+  payment,
+  onEdit,
+  onDelete,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  payment: Tables<"payments"> | null;
+  onEdit: (payment: Tables<"payments">) => void;
+  onDelete: (payment: Tables<"payments">) => void;
+}) => {
+  if (!isOpen || !payment) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+        <h3 className="text-lg font-semibold mb-4">Opciones de Pago</h3>
+
+        {/* Información del pago */}
+        <div className="mb-6 p-4 bg-gray-50 rounded-lg space-y-2">
+          <p>
+            <span className="font-medium">Usuario:</span> {payment.full_name}
+          </p>
+          <p>
+            <span className="font-medium">Concepto:</span> {payment.concept}
+          </p>
+          <p>
+            <span className="font-medium">Importe:</span> {payment.amount}€
+          </p>
+          <p>
+            <span className="font-medium">Método:</span>{" "}
+            {payment.payment_method}
+          </p>
+          <p>
+            <span className="font-medium">Fecha:</span>{" "}
+            {new Date(payment.payment_date).toLocaleDateString()}
+          </p>
+        </div>
+
+        {/* Botones de acción */}
+        <div className="flex flex-col gap-2">
+          <Button
+            onClick={() => {
+              onEdit(payment);
+              onClose();
+            }}
+            className="w-full"
+          >
+            Editar Pago
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (confirm("¿Estás seguro de que quieres eliminar este pago?")) {
+                onDelete(payment);
+                onClose();
+              }
+            }}
+            className="w-full text-red-600 hover:text-red-700 border-red-300 hover:border-red-400"
+          >
+            Eliminar Pago
+          </Button>
+          <Button variant="outline" onClick={onClose} className="w-full">
+            Cancelar
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function PaymentsPage() {
-  const { user, profile, isLoading, isAdmin, isStaff } = useProfile();
+  const { user, isLoading, isAdmin, isStaff } = useProfile();
   const [payments, setPayments] = useState<Tables<"payments">[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -52,6 +125,9 @@ export default function PaymentsPage() {
   const [users, setUsers] = useState<UserOption[]>([]);
   const [openUserSearch, setOpenUserSearch] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState("");
+  const [showPaymentOptions, setShowPaymentOptions] = useState(false);
+  const [selectedPayment, setSelectedPayment] =
+    useState<Tables<"payments"> | null>(null);
 
   useEffect(() => {
     if (user && (isAdmin || isStaff)) {
@@ -79,7 +155,7 @@ export default function PaymentsPage() {
 
       const { users } = await response.json();
       setUsers(users);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error fetching users:", error);
       toast.error("Error al cargar los usuarios");
     }
@@ -94,7 +170,7 @@ export default function PaymentsPage() {
 
       if (error) throw error;
       setPayments(data || []);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error fetching payments:", error);
       toast.error("Error al cargar los pagos");
     } finally {
@@ -176,13 +252,14 @@ export default function PaymentsPage() {
       setIsCreating(false);
       setEditingPayment(null);
       fetchPayments();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error saving payment:", error);
       toast.error("Error al guardar el pago");
     }
   };
 
-  const handleEdit = (payment: Tables<"payments">) => {
+  const handleEditPayment = (payment: Tables<"payments">) => {
+    setEditingPayment(payment);
     setFormData({
       user_id: payment.user_id,
       full_name: payment.full_name,
@@ -191,29 +268,54 @@ export default function PaymentsPage() {
       payment_method: payment.payment_method as typeof formData.payment_method,
       payment_date: payment.payment_date,
     });
-    setEditingPayment(payment);
     setIsCreating(true);
   };
 
-  const handleDelete = async (paymentId: string) => {
-    if (
-      !confirm(
-        "¿Estás seguro de que quieres eliminar este pago? Esta acción no se puede deshacer."
-      )
-    ) {
-      return;
-    }
-
+  const handleDeletePayment = async (payment: Tables<"payments">) => {
     try {
       const { error } = await supabase
         .from("payments")
         .delete()
-        .eq("id", paymentId);
+        .eq("id", payment.id);
 
       if (error) throw error;
+
       toast.success("Pago eliminado correctamente");
+
+      // Procesar automáticamente el estado del usuario después de eliminar un pago
+      try {
+        const { data: session } = await supabase.auth.getSession();
+        if (session.session) {
+          const response = await fetch(
+            `/api/payments/process-status?userId=${payment.user_id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${session.session.access_token}`,
+              },
+            }
+          );
+
+          if (response.ok) {
+            const result = await response.json();
+            if (result.statusChanged) {
+              toast.success(
+                `Estado del usuario actualizado a: ${
+                  result.newStatus === "active"
+                    ? "Activo"
+                    : result.newStatus === "pending"
+                    ? "Pendiente"
+                    : "Suspendido"
+                }`
+              );
+            }
+          }
+        }
+      } catch (statusError) {
+        console.error("Error updating user status:", statusError);
+      }
+
       fetchPayments();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error deleting payment:", error);
       toast.error("Error al eliminar el pago");
     }
@@ -230,41 +332,6 @@ export default function PaymentsPage() {
     });
     setIsCreating(false);
     setEditingPayment(null);
-  };
-
-  const processAllUserStatuses = async () => {
-    if (
-      !confirm(
-        "¿Estás seguro de que quieres procesar los estados de todos los usuarios? Esta acción verificará los pagos y actualizará estados automáticamente."
-      )
-    ) {
-      return;
-    }
-
-    try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) {
-        toast.error("No hay sesión activa");
-        return;
-      }
-
-      const response = await fetch("/api/payments/process-status", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.session.access_token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Error al procesar estados");
-      }
-
-      const result = await response.json();
-      toast.success(result.message);
-    } catch (error: any) {
-      console.error("Error processing user statuses:", error);
-      toast.error("Error al procesar estados de usuarios");
-    }
   };
 
   const filteredPayments = payments.filter(
@@ -312,42 +379,33 @@ export default function PaymentsPage() {
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-6xl mx-auto px-4">
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">
-            Gestión de Clases
-          </h1>
-          <div className="flex items-center justify-between">
-            <Link href="/">
-              <Button variant="outline">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Volver
-              </Button>
-            </Link>
-            <Button onClick={() => setIsCreating(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Registrar Pago
-            </Button>
-          </div>
-        </div>
 
-        {/* Búsqueda */}
+        {/* Búsqueda y botón crear pago */}
         {!isCreating && (
           <Card className="mb-6">
             <CardContent className="py-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <input
-                  type="text"
-                  placeholder="Buscar por nombre o concepto..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre o concepto..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <Button
+                  onClick={() => setIsCreating(true)}
+                  className="sm:w-auto"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Crear Pago
+                </Button>
               </div>
             </CardContent>
           </Card>
         )}
-
         {/* Formulario de creación/edición */}
         {isCreating && (
           <Card className="mb-6">
@@ -530,55 +588,36 @@ export default function PaymentsPage() {
         )}
 
         {/* Lista de pagos */}
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           {filteredPayments.map((payment) => (
-            <Card key={payment.id}>
-              <CardContent className="py-4">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CreditCard className="h-5 w-5 text-blue-600" />
-                      <h3 className="font-semibold text-lg">
-                        {payment.full_name}
-                      </h3>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm text-gray-600">
-                      <div>
-                        <span className="font-medium">Concepto:</span>{" "}
-                        {payment.concept}
-                      </div>
-                      <div>
-                        <span className="font-medium">Importe:</span>{" "}
-                        {payment.amount}€
-                      </div>
-                      <div>
-                        <span className="font-medium">Método:</span>{" "}
-                        {payment.payment_method}
-                      </div>
-                      <div>
-                        <span className="font-medium">Fecha:</span>{" "}
+            <Card
+              key={payment.id}
+              className="py-2 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => {
+                setSelectedPayment(payment);
+                setShowPaymentOptions(true);
+              }}
+            >
+              <CardContent className="py-3">
+                <div className="space-y-1">
+                  {/* Primera línea: nombre, fecha, importe */}
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-semibold text-base">
+                      {payment.full_name}
+                    </h3>
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-gray-600">
                         {new Date(payment.payment_date).toLocaleDateString()}
-                      </div>
+                      </span>
+                      <span className="font-semibold text-blue-600">
+                        {payment.amount}€
+                      </span>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleEdit(payment)}
-                    >
-                      <Edit className="h-4 w-4 mr-1" />
-                      Editar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleDelete(payment.id)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Trash className="h-4 w-4 mr-1" />
-                      Eliminar
-                    </Button>
+                  {/* Segunda línea: concepto y método */}
+                  <div className="flex justify-between items-center text-sm text-gray-600">
+                    <span>{payment.concept}</span>
+                    <span>{payment.payment_method}</span>
                   </div>
                 </div>
               </CardContent>
@@ -589,7 +628,6 @@ export default function PaymentsPage() {
         {filteredPayments.length === 0 && (
           <Card>
             <CardContent className="py-8 text-center">
-              <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500">
                 {searchTerm
                   ? "No se encontraron pagos con ese criterio"
@@ -599,6 +637,15 @@ export default function PaymentsPage() {
           </Card>
         )}
       </div>
+
+      {/* Dialog de opciones de pago */}
+      <PaymentOptionsDialog
+        isOpen={showPaymentOptions}
+        onClose={() => setShowPaymentOptions(false)}
+        payment={selectedPayment}
+        onEdit={handleEditPayment}
+        onDelete={handleDeletePayment}
+      />
     </div>
   );
 }

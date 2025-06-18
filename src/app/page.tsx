@@ -1,21 +1,46 @@
 "use client";
 
-import { BookOpen, CreditCard, Users } from "lucide-react";
+import { CreditCard, User, Users } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useProfile } from "@/hooks/useProfile";
 import { AuthForm } from "@/components/auth/AuthForm";
-import { UserInfo } from "@/components/auth/UserInfo";
 import { UserClassesContent } from "@/components/UserClassesContent";
 
 export default function HomePage() {
   const { profile, isLoading, isAdmin, isStaff, user } = useProfile();
+  const router = useRouter();
+
+  useEffect(() => {
+    // Si el usuario está logueado, redirigir según su rol
+    if (user && profile && !isLoading) {
+      if (isAdmin) {
+        router.push("/users");
+      } else if (isStaff) {
+        router.push("/userclasses");
+      } else {
+        router.push("/userclasses");
+      }
+    }
+  }, [user, profile, isAdmin, isStaff, isLoading, router]);
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-lg">Cargando...</div>
+      </div>
+    );
+  }
+
+  // Si el usuario está logueado, mostrar loading mientras redirige
+  if (user && profile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-lg">Redirigiendo...</div>
       </div>
     );
   }
@@ -26,16 +51,17 @@ export default function HomePage() {
 
       {user && (
         <>
-          <UserInfo />
           {/* Dashboard principal */}
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {profile?.role !== "admin" && (
-            <div className="mb-12">
-              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">
-                Bienvenido a Siam May
-              </h1>
-              <p className="text-lg text-gray-600">Gimnasio Muay Thai & MMA</p>
-            </div>
+              <div className="mb-12">
+                <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">
+                  Bienvenido a Siam May
+                </h1>
+                <p className="text-lg text-gray-600">
+                  Gimnasio Muay Thai & MMA
+                </p>
+              </div>
             )}
             {/* Para usuarios normales */}
             {profile?.role !== "admin" && profile?.role !== "staff" && (
@@ -52,7 +78,7 @@ export default function HomePage() {
                     <Card className="hover:shadow-lg transition-shadow">
                       <CardHeader className="pb-4">
                         <CardTitle className="flex items-center gap-2">
-                          <Users className="h-5 w-5" />
+                          <User className="h-5 w-5" />
                           Mi Perfil
                         </CardTitle>
                       </CardHeader>
@@ -85,7 +111,29 @@ export default function HomePage() {
                     <Card className="hover:shadow-lg transition-shadow">
                       <CardHeader className="pb-4">
                         <CardTitle className="flex items-center gap-2">
-                          <BookOpen className="h-5 w-5" />
+                          <Users className="h-5 w-5" />
+                          Gestión de Usuarios
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-600 mb-6">
+                          Administra todos los usuarios
+                        </p>
+                        <Link href="/users">
+                          <Button className="w-full">Gestionar Usuarios</Button>
+                        </Link>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="hover:shadow-lg transition-shadow">
+                      <CardHeader className="pb-4">
+                        <CardTitle className="flex items-center gap-2">
+                          <Image
+                            src="/Gym.png"
+                            alt="Gym"
+                            width={20}
+                            height={20}
+                          />
                           Gestión de Clases
                         </CardTitle>
                       </CardHeader>
@@ -119,7 +167,7 @@ export default function HomePage() {
                     <Card className="hover:shadow-lg transition-shadow">
                       <CardHeader className="pb-4">
                         <CardTitle className="flex items-center gap-2">
-                          <Users className="h-5 w-5" />
+                          <User className="h-5 w-5" />
                           Mi Perfil
                         </CardTitle>
                       </CardHeader>
@@ -164,7 +212,12 @@ export default function HomePage() {
                   <Card className="hover:shadow-lg transition-shadow">
                     <CardHeader className="pb-4">
                       <CardTitle className="flex items-center gap-2">
-                        <BookOpen className="h-5 w-5" />
+                        <Image
+                          src="/Gym.png"
+                          alt="Gym"
+                          width={30}
+                          height={30}
+                        />
                         Gestión de Clases
                       </CardTitle>
                     </CardHeader>
@@ -198,7 +251,7 @@ export default function HomePage() {
                   <Card className="hover:shadow-lg transition-shadow">
                     <CardHeader className="pb-4">
                       <CardTitle className="flex items-center gap-2">
-                        <Users className="h-5 w-5" />
+                        <User className="h-5 w-5" />
                         Mi Perfil
                       </CardTitle>
                     </CardHeader>

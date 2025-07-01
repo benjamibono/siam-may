@@ -81,14 +81,14 @@ const PaymentOptionsDialog = ({
             Editar Pago
           </Button>
           <Button
-            variant="outline"
+            variant="destructive"
             onClick={() => {
               if (confirm("¿Estás seguro de que quieres eliminar este pago?")) {
                 onDelete(payment);
                 onClose();
               }
             }}
-            className="w-full text-red-600 hover:text-red-700 border-red-300 hover:border-red-400"
+            className="w-full"
           >
             Eliminar Pago
           </Button>
@@ -116,7 +116,8 @@ export default function PaymentsPage() {
       | "Cuota mensual Muay Thai"
       | "Cuota mensual MMA"
       | "Cuota mensual Muay Thai + MMA"
-      | "Matrícula",
+      | "Matrícula"
+      | "Seguro Médico",
     amount: 30,
     payment_method: "Efectivo" as "Efectivo" | "Bizum" | "Transferencia",
     payment_date: new Date().toISOString().split("T")[0],
@@ -345,10 +346,12 @@ export default function PaymentsPage() {
       case "Cuota mensual Muay Thai":
         return 30;
       case "Cuota mensual MMA":
-        return 30;
+        return 45;
       case "Cuota mensual Muay Thai + MMA":
-        return 40;
+        return 60;
       case "Matrícula":
+        return 30;
+      case "Seguro Médico":
         return 30;
       default:
         return 30;
@@ -461,9 +464,6 @@ export default function PaymentsPage() {
                             >
                               <div>
                                 <p>{user.label}</p>
-                                <p className="text-sm text-gray-500">
-                                  {user.email}
-                                </p>
                               </div>
                             </CommandItem>
                           ))}
@@ -502,6 +502,7 @@ export default function PaymentsPage() {
                       Cuota mensual Muay Thai + MMA
                     </option>
                     <option value="Matrícula">Matrícula</option>
+                    <option value="Seguro Médico">Seguro Médico</option>
                   </select>
                 </div>
 

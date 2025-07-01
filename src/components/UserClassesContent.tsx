@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Calendar, Users, Clock } from "lucide-react";
+import { Calendar, Users, Clock, ShieldAlert } from "lucide-react";
 import Image from "next/image";
 import type { Tables } from "@/lib/supabase";
 import {
@@ -15,7 +15,9 @@ import {
   canEnrollInClassType,
   // getClassRestrictionMessage, // Unused import
   getCurrentMonthYear,
+  isValidMedicalInsurance,
 } from "@/lib/payment-logic";
+import { formatClassDays, parseSchedule } from "@/lib/utils";
 
 interface ClassWithEnrollment extends Tables<"classes"> {
   is_enrolled: boolean;
@@ -42,21 +44,6 @@ const getClassIcon = (className: string, description?: string) => {
   return { src: "/gym.png", alt: "Clase" };
 };
 
-// Función para parsear el horario de clases
-const parseSchedule = (schedule: string) => {
-  if (!schedule) return { days: [], start: "", end: "" };
-
-  // Intentar parsear el formato "Lunes, Miércoles 19:00-20:30"
-  const match = schedule.match(/^(.+?)\s+(\d{2}:\d{2})-(\d{2}:\d{2})$/);
-  if (match) {
-    const [, daysStr, start, end] = match;
-    const days = daysStr.split(/,\s*(?:y\s+)?/);
-    return { days, start, end };
-  }
-
-  return { days: [], start: "", end: "" };
-};
-
 export function UserClassesContent() {
   const { user, profile } = useProfile();
   const [classes, setClasses] = useState<ClassWithEnrollment[]>([]);
@@ -65,15 +52,15 @@ export function UserClassesContent() {
     concept: string;
     payment_date: string;
   } | null>(null);
+  const [medicalInsurance, setMedicalInsurance] = useState<{
+    isValid: boolean;
+    lastPaymentDate: string | null;
+  }>({
+    isValid: false,
+    lastPaymentDate: null,
+  });
 
-  useEffect(() => {
-    if (user) {
-      fetchClasses();
-      fetchLastPayment();
-    }
-  }, [user]);
-
-  const fetchLastPayment = async () => {
+  const fetchLastPayment = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -96,9 +83,36 @@ export function UserClassesContent() {
     } catch {
       // Handle error silently
     }
-  };
+  }, [user]);
 
-  const fetchClasses = async () => {
+  const fetchMedicalInsurance = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      const { data: insurance, error } = await supabase
+        .from("payments")
+        .select("payment_date")
+        .eq("user_id", user.id)
+        .eq("concept", "Seguro Médico")
+        .order("payment_date", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error && error.code !== "PGRST116") {
+        console.error("Error fetching medical insurance:", error);
+        return;
+      }
+
+      setMedicalInsurance({
+        isValid: isValidMedicalInsurance(insurance?.payment_date || null),
+        lastPaymentDate: insurance?.payment_date || null,
+      });
+    } catch (error) {
+      console.error("Error fetching medical insurance:", error);
+    }
+  }, [user]);
+
+  const fetchClasses = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -147,7 +161,15 @@ export function UserClassesContent() {
     } finally {
       setLoadingClasses(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      fetchClasses();
+      fetchLastPayment();
+      fetchMedicalInsurance();
+    }
+  }, [user, fetchClasses, fetchLastPayment, fetchMedicalInsurance]);
 
   const handleEnrollment = async (
     classId: string,
@@ -199,215 +221,240 @@ export function UserClassesContent() {
   const availableClasses = classes.filter((cls) => !cls.is_enrolled);
 
   return (
-    <div className="space-y-12">
-      {/* Estado del Usuario */}
-      {/* {profile && (
-        <div className="max-w-4xl mx-auto mb-4">
-          <p className="text-sm text-gray-700">
-            Estado:{" "}
-            <span className="font-medium">
-              {profile.status === "active" ? "Activo" : "Pendiente"}
-            </span>
-          </p>
-        </div>
-      )} */}
-
-      {/* Clases Inscritas */}
-      <div>
-        <h2 className="text-2xl font-semibold text-gray-900 mb-6">
-          Clases en las que estás inscrito
-        </h2>
-        {enrolledClasses.length === 0 ? (
-          <Card className="max-w-2xl mx-auto">
-            <CardContent className="py-12 text-center">
-              <Image
-                src="/gym.png"
-                alt="Gym"
-                width={30}
-                height={30}
-                className="mx-auto mb-4"
-              />
-              <p className="text-lg text-gray-500">
-                No estás inscrito en ninguna clase aún.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {enrolledClasses.map((cls) => (
-              <Card
-                key={cls.id}
-                className="border-green-200 bg-green-50 hover:shadow-lg transition-shadow"
+    <div className="container mx-auto p-4">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold mb-4">Mis Clases</h1>
+        
+        {/* Medical Insurance Status */}
+        <Card className={`mb-4 ${medicalInsurance.isValid ? 'bg-green-50' : 'bg-red-50'}`}>
+          <CardContent className="flex items-center justify-between p-4">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className={medicalInsurance.isValid ? 'text-green-600' : 'text-red-600'} />
+              <div>
+                <h3 className="font-semibold">Seguro Médico</h3>
+                <p className="text-sm text-gray-600">
+                  {medicalInsurance.isValid
+                    ? "Tu seguro médico está vigente"
+                    : "Necesitas renovar tu seguro médico para poder inscribirte en las clases"}
+                </p>
+                {medicalInsurance.lastPaymentDate && (
+                  <p className="text-xs text-gray-500">
+                    Último pago: {new Date(medicalInsurance.lastPaymentDate).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+            </div>
+            {!medicalInsurance.isValid && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => toast.error("Por favor, contacta con administración para renovar tu seguro médico")}
               >
-                <CardHeader className="pb-4">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    {(() => {
-                      const icon = getClassIcon(
-                        cls.name,
-                        cls.description || undefined
-                      );
-                      return (
-                        <Image
-                          src={icon.src}
-                          alt={icon.alt}
-                          width={30}
-                          height={30}
-                        />
-                      );
-                    })()}
-                    {cls.name}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {cls.description && (
-                    <p className="text-gray-600 text-sm line-clamp-3">
-                      {cls.description}
-                    </p>
-                  )}
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Calendar className="h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">
-                        {(() => {
-                          const parsed = parseSchedule(cls.schedule);
-                          return parsed.days.length > 0
-                            ? parsed.days.join(", ")
-                            : "Sin días definidos";
-                        })()}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Clock className="h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">
-                        {(() => {
-                          const parsed = parseSchedule(cls.schedule);
-                          return parsed.start && parsed.end
-                            ? `${parsed.start} - ${parsed.end}`
-                            : "Sin horario definido";
-                        })()}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Users className="h-4 w-4 flex-shrink-0" />
-                      <span>
-                        {cls.enrollment_count}/{cls.capacity} inscritos
-                      </span>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleEnrollment(cls.id, true, cls.name)}
-                    className="w-full mt-4"
-                  >
-                    Desinscribirse
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+                Renovar Seguro
+              </Button>
+            )}
+          </CardContent>
+        </Card>
 
-      {/* Clases Disponibles */}
-      <div>
-        <h2 className="text-2xl font-semibold text-gray-900 mb-6">
-          Clases disponibles
-        </h2>
-        {availableClasses.length === 0 ? (
-          <Card className="max-w-2xl mx-auto">
-            <CardContent className="py-12 text-center">
-              <p className="text-lg text-gray-500">
-                No hay clases disponibles para inscribirse.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {availableClasses.map((cls) => (
-              <Card key={cls.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader className="pb-4">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    {(() => {
-                      const icon = getClassIcon(
-                        cls.name,
-                        cls.description || undefined
-                      );
-                      return (
-                        <Image
-                          src={icon.src}
-                          alt={icon.alt}
-                          width={30}
-                          height={30}
-                        />
-                      );
-                    })()}
-                    {cls.name}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {cls.description && (
-                    <p className="text-gray-600 text-sm line-clamp-3">
-                      {cls.description}
-                    </p>
-                  )}
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Calendar className="h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">
-                        {(() => {
-                          const parsed = parseSchedule(cls.schedule);
-                          return parsed.days.length > 0
-                            ? parsed.days.join(", ")
-                            : "Sin días definidos";
-                        })()}
-                      </span>
+        {/* Clases Inscritas */}
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-900 mb-6">
+            Clases en las que estás inscrito
+          </h2>
+          {enrolledClasses.length === 0 ? (
+            <Card className="max-w-2xl mx-auto">
+              <CardContent className="py-12 text-center">
+                <Image
+                  src="/gym.png"
+                  alt="Gym"
+                  width={30}
+                  height={30}
+                  className="mx-auto mb-4"
+                />
+                <p className="text-lg text-gray-500">
+                  No estás inscrito en ninguna clase aún.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {enrolledClasses.map((cls) => (
+                <Card
+                  key={cls.id}
+                  className="border-green-200 bg-green-50 hover:shadow-lg transition-shadow"
+                >
+                  <CardHeader className="pb-4">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      {(() => {
+                        const icon = getClassIcon(
+                          cls.name,
+                          cls.description || undefined
+                        );
+                        return (
+                          <Image
+                            src={icon.src}
+                            alt={icon.alt}
+                            width={30}
+                            height={30}
+                          />
+                        );
+                      })()}
+                      {cls.name}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {cls.description && (
+                      <p className="text-gray-600 text-sm line-clamp-3">
+                        {cls.description}
+                      </p>
+                    )}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Calendar className="h-4 w-4 flex-shrink-0" />
+                        <span className="truncate">
+                          {(() => {
+                            const parsed = parseSchedule(cls.schedule);
+                            return parsed.days.length > 0
+                              ? formatClassDays(parsed.days, true)
+                              : "Sin días definidos";
+                          })()}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Clock className="h-4 w-4 flex-shrink-0" />
+                        <span className="truncate">
+                          {(() => {
+                            const parsed = parseSchedule(cls.schedule);
+                            return parsed.start && parsed.end
+                              ? `${parsed.start} - ${parsed.end}`
+                              : "Sin horario definido";
+                          })()}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Users className="h-4 w-4 flex-shrink-0" />
+                        <span>
+                          {cls.enrollment_count}/{cls.capacity} inscritos
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Clock className="h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">
-                        {(() => {
-                          const parsed = parseSchedule(cls.schedule);
-                          return parsed.start && parsed.end
-                            ? `${parsed.start} - ${parsed.end}`
-                            : "Sin horario definido";
-                        })()}
-                      </span>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleEnrollment(cls.id, true, cls.name)}
+                      className="w-full mt-4"
+                    >
+                      Desinscribirse
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Clases Disponibles */}
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-900 mb-6">
+            Clases disponibles
+          </h2>
+          {availableClasses.length === 0 ? (
+            <Card className="max-w-2xl mx-auto">
+              <CardContent className="py-12 text-center">
+                <p className="text-lg text-gray-500">
+                  No hay clases disponibles para inscribirse.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {availableClasses.map((cls) => (
+                <Card key={cls.id} className="hover:shadow-lg transition-shadow">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      {(() => {
+                        const icon = getClassIcon(
+                          cls.name,
+                          cls.description || undefined
+                        );
+                        return (
+                          <Image
+                            src={icon.src}
+                            alt={icon.alt}
+                            width={30}
+                            height={30}
+                          />
+                        );
+                      })()}
+                      {cls.name}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {cls.description && (
+                      <p className="text-gray-600 text-sm line-clamp-3">
+                        {cls.description}
+                      </p>
+                    )}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Calendar className="h-4 w-4 flex-shrink-0" />
+                        <span className="truncate">
+                          {(() => {
+                            const parsed = parseSchedule(cls.schedule);
+                            return parsed.days.length > 0
+                              ? formatClassDays(parsed.days, true)
+                              : "Sin días definidos";
+                          })()}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Clock className="h-4 w-4 flex-shrink-0" />
+                        <span className="truncate">
+                          {(() => {
+                            const parsed = parseSchedule(cls.schedule);
+                            return parsed.start && parsed.end
+                              ? `${parsed.start} - ${parsed.end}`
+                              : "Sin horario definido";
+                          })()}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Users className="h-4 w-4 flex-shrink-0" />
+                        <span>
+                          {cls.enrollment_count}/{cls.capacity} inscritos
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Users className="h-4 w-4 flex-shrink-0" />
-                      <span>
-                        {cls.enrollment_count}/{cls.capacity} inscritos
-                      </span>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={() => handleEnrollment(cls.id, false, cls.name)}
-                    className="w-full mt-4"
-                    disabled={
-                      cls.enrollment_count >= cls.capacity ||
-                      !canEnrollInClasses(profile?.status || "") ||
-                      !canEnrollInClassType(
-                        cls.name,
-                        lastPayment?.concept || null
-                      )
-                    }
-                  >
-                    {cls.enrollment_count >= cls.capacity
-                      ? "Clase Llena"
-                      : !canEnrollInClasses(profile?.status || "")
-                      ? "No disponible"
-                      : !canEnrollInClassType(
+                    <Button
+                      onClick={() => handleEnrollment(cls.id, false, cls.name)}
+                      className="w-full mt-4"
+                      disabled={
+                        cls.enrollment_count >= cls.capacity ||
+                        !canEnrollInClasses(profile?.status || "", medicalInsurance.isValid) ||
+                        !canEnrollInClassType(
                           cls.name,
                           lastPayment?.concept || null
                         )
-                      ? "Cuota no válida"
-                      : "Inscribirse"}
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+                      }
+                    >
+                      {cls.enrollment_count >= cls.capacity
+                        ? "Clase Llena"
+                        : !medicalInsurance.isValid
+                        ? "Seguro Médico Requerido"
+                        : !canEnrollInClasses(profile?.status || "", medicalInsurance.isValid)
+                        ? "No disponible"
+                        : !canEnrollInClassType(
+                            cls.name,
+                            lastPayment?.concept || null
+                          )
+                        ? "Cuota no válida"
+                        : "Inscribirse"}
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

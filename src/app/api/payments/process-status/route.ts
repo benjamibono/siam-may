@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { supabase } from "@/lib/supabase";
 import {
   getCurrentMonthYear,
-  // isPaymentFromCurrentMonth, // Unused import
+  isValidMedicalInsurance,
   getNewUserStatus,
 } from "@/lib/payment-logic";
 
@@ -47,8 +47,8 @@ export async function POST(request: NextRequest) {
     // Obtener todos los usuarios (excepto admin)
     const { data: users, error: usersError } = await supabaseAdmin
       .from("profiles")
-      .select("id, status")
-      .neq("role", "admin");
+      .select("id, status, role")
+      .in("role", ["user"]);
 
     if (usersError) throw usersError;
 
@@ -81,7 +81,8 @@ export async function POST(request: NextRequest) {
       const hasCurrentMonthPayment = payments && payments.length > 0;
       const newStatus = getNewUserStatus(
         userProfile.status,
-        hasCurrentMonthPayment
+        hasCurrentMonthPayment,
+        userProfile.role
       );
 
       // Solo actualizar si el estado ha cambiado
@@ -153,7 +154,7 @@ export async function GET(request: NextRequest) {
     // Obtener el usuario
     const { data: userProfile, error: userError } = await supabaseAdmin
       .from("profiles")
-      .select("id, status")
+      .select("id, status, role")
       .eq("id", userId)
       .single();
 
@@ -175,15 +176,32 @@ export async function GET(request: NextRequest) {
         "payment_date",
         `${year}-${(month + 1).toString().padStart(2, "0")}-01`
       )
-      .order("payment_date", { ascending: false })
-      .limit(1);
+      .order("payment_date", { ascending: false });
 
     if (paymentsError) throw paymentsError;
 
-    const hasCurrentMonthPayment = payments && payments.length > 0;
+    // Verificar el último pago de seguro médico
+    const { data: lastMedicalInsurance, error: medicalInsuranceError } = await supabaseAdmin
+      .from("payments")
+      .select("payment_date")
+      .eq("user_id", userId)
+      .eq("concept", "Seguro Médico")
+      .order("payment_date", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (medicalInsuranceError && medicalInsuranceError.code !== "PGRST116") {
+      throw medicalInsuranceError;
+    }
+
+    const hasValidMedicalInsurance = isValidMedicalInsurance(lastMedicalInsurance?.payment_date || null);
+    const hasCurrentMonthPayment = payments && payments.some(p => p.concept !== "Seguro Médico");
+
     const newStatus = getNewUserStatus(
       userProfile.status,
-      hasCurrentMonthPayment
+      hasCurrentMonthPayment,
+      userProfile.role,
+      hasValidMedicalInsurance
     );
 
     // Actualizar estado si es necesario
@@ -204,6 +222,8 @@ export async function GET(request: NextRequest) {
         oldStatus: userProfile.status,
         newStatus: newStatus,
         lastPayment: payments?.[0] || null,
+        medicalInsuranceValid: hasValidMedicalInsurance,
+        lastMedicalInsurance: lastMedicalInsurance?.payment_date || null,
       });
     }
 
@@ -212,6 +232,8 @@ export async function GET(request: NextRequest) {
       statusChanged: false,
       currentStatus: userProfile.status,
       lastPayment: payments?.[0] || null,
+      medicalInsuranceValid: hasValidMedicalInsurance,
+      lastMedicalInsurance: lastMedicalInsurance?.payment_date || null,
     });
   } catch (error) {
     console.error("Error processing user status:", error);

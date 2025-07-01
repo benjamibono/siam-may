@@ -93,8 +93,8 @@ export async function POST(request: NextRequest) {
 
     // Tests de diferentes formatos de horario
     const sampleSchedules = [
-      "Lunes, Miércoles, Viernes 19:00-20:00",
-      "Martes, Jueves 18:30-19:30",
+      "Lunes, Miércoles y Viernes 19:00-20:00",
+      "Martes y Jueves 18:30-19:30",
       "Sábado 10:00-11:30",
       "Lunes y Miércoles 20:00-21:00",
       "Formato inválido",

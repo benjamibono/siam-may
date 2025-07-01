@@ -155,27 +155,68 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await verifyAdminOrStaff(request);
-  if (!user) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
   try {
     const { id } = await params;
+    
+    // Create a Supabase client with service role key for admin operations
+    const supabaseAdminAuth = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
 
-    const { error } = await supabaseAdmin
+    // Verify the request is from an admin
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabaseAdminAuth.auth.getUser(token);
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Verify admin role
+    const { data: adminData } = await supabaseAdminAuth
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (!adminData || adminData.role !== "admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Delete user from auth schema using admin client
+    const { error: deleteError } = await supabaseAdminAuth.auth.admin.deleteUser(
+      id,
+      true // Use soft delete for compliance and data retention
+    );
+
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    // Delete user profile from profiles table
+    const { error: profileDeleteError } = await supabaseAdminAuth
       .from("profiles")
       .delete()
       .eq("id", id);
 
-    if (error) throw error;
+    if (profileDeleteError) {
+      throw profileDeleteError;
+    }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ message: "User deleted successfully" });
   } catch (error) {
     console.error("Error deleting user:", error);
-    return NextResponse.json(
-      { error: "Error al eliminar usuario" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error deleting user" }, { status: 500 });
   }
 }

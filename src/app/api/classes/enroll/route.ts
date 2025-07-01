@@ -7,6 +7,7 @@ import {
   canEnrollInClassType,
   getEnrollmentStatusMessage,
   getClassRestrictionMessage,
+  isValidMedicalInsurance,
 } from "@/lib/payment-logic";
 
 // Cliente admin para operaciones privilegiadas
@@ -111,9 +112,21 @@ async function enrollmentHandler(request: NextRequest): Promise<NextResponse> {
         message: "Te has desinscrito de la clase exitosamente",
       });
     } else if (action === "enroll") {
-      // Verificar si puede inscribirse según el estado
-      if (!canEnrollInClasses(profile.status)) {
-        const message = getEnrollmentStatusMessage(profile.status);
+      // Verificar el último pago de seguro médico
+      const { data: lastMedicalInsurance } = await supabaseAdmin
+        .from("payments")
+        .select("payment_date")
+        .eq("user_id", user.id)
+        .eq("concept", "Seguro Médico")
+        .order("payment_date", { ascending: false })
+        .limit(1)
+        .single();
+
+      const hasMedicalInsurance = isValidMedicalInsurance(lastMedicalInsurance?.payment_date || null);
+
+      // Verificar si puede inscribirse según el estado y seguro médico
+      if (!canEnrollInClasses(profile.status, hasMedicalInsurance)) {
+        const message = getEnrollmentStatusMessage(profile.status, hasMedicalInsurance);
         return NextResponse.json({ error: message }, { status: 403 });
       }
 

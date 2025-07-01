@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { CreditCard, Plus } from "lucide-react";
 import type { Tables } from "@/lib/supabase";
+import { isValidMedicalInsurance, getCurrentMonthYear } from "@/lib/payment-logic";
 
 // Componente Dialog simple para reset de contraseña
 const PasswordResetDialog = ({
@@ -100,7 +101,8 @@ const CreatePaymentDialog = ({
       | "Cuota mensual Muay Thai"
       | "Cuota mensual MMA"
       | "Cuota mensual Muay Thai + MMA"
-      | "Matrícula",
+      | "Matrícula"
+      | "Seguro Médico",
     amount: 30,
     payment_method: "Efectivo" as "Efectivo" | "Bizum" | "Transferencia",
     payment_date: new Date().toISOString().split("T")[0],
@@ -124,10 +126,12 @@ const CreatePaymentDialog = ({
       case "Cuota mensual Muay Thai":
         return 30;
       case "Cuota mensual MMA":
-        return 30;
+        return 45;
       case "Cuota mensual Muay Thai + MMA":
-        return 40;
+        return 60;
       case "Matrícula":
+        return 30;
+      case "Seguro Médico":
         return 30;
       default:
         return 30;
@@ -243,6 +247,7 @@ const CreatePaymentDialog = ({
                 Cuota mensual Muay Thai + MMA
               </option>
               <option value="Matrícula">Matrícula</option>
+              <option value="Seguro Médico">Seguro Médico</option>
             </select>
           </div>
 
@@ -369,14 +374,14 @@ const PaymentOptionsDialog = ({
             Editar Pago
           </Button>
           <Button
-            variant="outline"
+            variant="destructive"
             onClick={() => {
               if (confirm("¿Estás seguro de que quieres eliminar este pago?")) {
                 onDelete(payment);
                 onClose();
               }
             }}
-            className="w-full text-red-600 hover:text-red-700 border-red-300 hover:border-red-400"
+            className="w-full"
           >
             Eliminar Pago
           </Button>
@@ -406,7 +411,8 @@ const EditPaymentDialog = ({
       | "Cuota mensual Muay Thai"
       | "Cuota mensual MMA"
       | "Cuota mensual Muay Thai + MMA"
-      | "Matrícula",
+      | "Matrícula"
+      | "Seguro Médico",
     amount: 30,
     payment_method: "Efectivo" as "Efectivo" | "Bizum" | "Transferencia",
     payment_date: new Date().toISOString().split("T")[0],
@@ -422,17 +428,19 @@ const EditPaymentDialog = ({
         payment_date: payment.payment_date,
       });
     }
-  }, [isOpen, payment]);
+  }, [isOpen, payment, formData]);
 
   const getConceptAmount = (concept: string) => {
     switch (concept) {
       case "Cuota mensual Muay Thai":
         return 30;
       case "Cuota mensual MMA":
-        return 30;
+        return 45;
       case "Cuota mensual Muay Thai + MMA":
-        return 40;
+        return 60;
       case "Matrícula":
+        return 30;
+      case "Seguro Médico":
         return 30;
       default:
         return 30;
@@ -539,6 +547,7 @@ const EditPaymentDialog = ({
                 Cuota mensual Muay Thai + MMA
               </option>
               <option value="Matrícula">Matrícula</option>
+              <option value="Seguro Médico">Seguro Médico</option>
             </select>
           </div>
 
@@ -611,6 +620,43 @@ const EditPaymentDialog = ({
   );
 };
 
+// Componente Dialog para confirmar eliminación de usuario
+const DeleteUserDialog = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  userName,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  userName: string;
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+        <h3 className="text-lg font-semibold mb-4">Eliminar Usuario</h3>
+        <p className="text-gray-600 mb-6">
+          ¿Estás seguro de que quieres eliminar al usuario {userName}? Esta acción no se puede deshacer.
+        </p>
+        <div className="flex gap-2 justify-end">
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button 
+            onClick={onConfirm}
+            className="bg-red-600 text-white hover:bg-red-700"
+          >
+            Eliminar Usuario
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function UserDetailPage({
   params,
 }: {
@@ -635,21 +681,18 @@ export default function UserDetailPage({
     phone: "",
     role: "user" as "admin" | "staff" | "user",
   });
-
-  // Unwrap params using React.use()
-  const { id } = use(params);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [id, setId] = useState<string>("");
 
   useEffect(() => {
-    if (!isLoading && (!user || (!isAdmin && !isStaff))) {
-      router.push("/");
-      return;
-    }
-    if (user) {
-      fetchUserData();
-    }
-  }, [user, isAdmin, isStaff, isLoading, id]);
+    const loadId = async () => {
+      const { id } = await params;
+      setId(id);
+    };
+    loadId();
+  }, [params]);
 
-  const fetchUserData = async () => {
+  const fetchUserData = useCallback(async () => {
     try {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
@@ -693,7 +736,17 @@ export default function UserDetailPage({
       console.error("Error fetching user:", error);
       toast.error("Error al cargar los datos del usuario");
     }
-  };
+  }, [id, router]);
+
+  useEffect(() => {
+    if (!isLoading && (!user || (!isAdmin && !isStaff))) {
+      router.push("/");
+      return;
+    }
+    if (user) {
+      fetchUserData();
+    }
+  }, [user, isAdmin, isStaff, isLoading, id, router, fetchUserData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -984,6 +1037,48 @@ export default function UserDetailPage({
     }
   };
 
+  const handleDeleteUser = async () => {
+    if (!targetUser) return;
+    setShowDeleteDialog(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!targetUser) return;
+
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      if (!token) {
+        toast.error("No autorizado");
+        return;
+      }
+
+      const response = await fetch(`/api/users/${targetUser.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          toast.error("No tienes permisos para realizar esta acción");
+          return;
+        }
+        throw new Error("Error al eliminar usuario");
+      }
+
+      toast.success("Usuario eliminado correctamente");
+      router.push("/users"); // Redirect to users list
+    } catch (error: unknown) {
+      console.error("Error deleting user:", error);
+      toast.error("Error al eliminar el usuario");
+    } finally {
+      setShowDeleteDialog(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -1007,91 +1102,8 @@ export default function UserDetailPage({
           <>
             <Card className="mb-6">
               <CardHeader>
-                <CardTitle>Información Personal</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {!isEditing ? (
-                  <div className="space-y-6">
-                    {/* Datos del usuario */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 md:grid-rows-3 gap-4">
-                      {/* Email - Posición 1: col-span-2 col-start-1 row-start-2 */}
-                      <div className="col-span-2 md:col-span-2 md:col-start-1 md:row-start-2">
-                        <label className="block text-sm font-medium text-gray-700">
-                          Email
-                        </label>
-                        <p className="text-gray-900">{targetUser.email}</p>
-                      </div>
-                      {/* Nombre - Posición 2: col-start-1 row-start-1 */}
-                      <div className=" md:col-start-1 md:row-start-1">
-                        <label className="block text-sm font-medium text-gray-700">
-                          Nombre
-                        </label>
-                        <p className="text-gray-900">
-                          {targetUser.name || "No especificado"}
-                        </p>
-                      </div>
-                      {/* Primer Apellido - Posición 3: col-start-2 row-start-1 */}
-                      <div className=" md:col-start-2 md:row-start-1">
-                        <label className="block text-sm font-medium text-gray-700">
-                          Primer Apellido
-                        </label>
-                        <p className="text-gray-900">
-                          {targetUser.first_surname || "No especificado"}
-                        </p>
-                      </div>
-                      {/* Segundo Apellido - Posición 4: col-start-3 row-start-1 */}
-                      <div className="md:col-start-3 md:row-start-1">
-                        <label className="block text-sm font-medium text-gray-700">
-                          Segundo Apellido
-                        </label>
-                        <p className="text-gray-900">
-                          {targetUser.second_surname || "No especificado"}
-                        </p>
-                      </div>
-                      {/* DNI - Posición 5: col-start-1 row-start-3 */}
-                      <div className="md:col-start-1 md:row-start-3">
-                        <label className="block text-sm font-medium text-gray-700">
-                          DNI
-                        </label>
-                        <p className="text-gray-900">
-                          {targetUser.dni || "No especificado"}
-                        </p>
-                      </div>
-                      {/* Teléfono - Posición 6: col-start-2 row-start-3 */}
-                      <div className="md:col-start-2 md:row-start-3">
-                        <label className="block text-sm font-medium text-gray-700">
-                          Teléfono
-                        </label>
-                        <p className="text-gray-900">
-                          {targetUser.phone || "No especificado"}
-                        </p>
-                      </div>
-                      {/* Estado - Posición 7: col-start-3 row-start-3 */}
-                      <div className="md:col-start-3 md:row-start-3">
-                        <label className="block text-sm font-medium text-gray-700">
-                          Estado
-                        </label>
-                        <span
-                          className={`inline-block px-2 py-1 text-xs rounded-full ${
-                            targetUser.status === "suspended"
-                              ? "bg-red-100 text-red-800"
-                              : targetUser.status === "pending"
-                              ? "bg-yellow-100 text-yellow-800"
-                              : "bg-green-100 text-green-800"
-                          }`}
-                        >
-                          {targetUser.status === "suspended"
-                            ? "Suspendido"
-                            : targetUser.status === "pending"
-                            ? "Pendiente de Pago"
-                            : "Activo"}
-                        </span>
-                      </div>
-                      {/* Rol - Posición 8: col-start-3 row-start-2 */}
-                      <div className="md:col-start-3 md:row-start-2">
-                        <label className="block text-sm font-medium text-gray-700">
-                          Rol
-                        </label>
+                <CardTitle className="flex items-center gap-6">Información Personal
+                  <div className="flex items-center gap-2">
                         <span className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
                           {targetUser.role === "admin"
                             ? "Administrador"
@@ -1099,6 +1111,153 @@ export default function UserDetailPage({
                             ? "Staff"
                             : "Usuario"}
                         </span>
+                        <div className="hidden md:flex items-center gap-2">
+                        {targetUser.status === "suspended" ? (
+                            <span className="inline-block px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">
+                              Suspendido
+                            </span>
+                          ) : targetUser.status === "pending" ? (
+                            <div className="flex items-center gap-2">
+                              {(() => {
+                                const lastMedicalInsurance = userPayments.find(
+                                  (p) => p.concept === "Seguro Médico"
+                                );
+                                const hasValidMedicalInsurance = lastMedicalInsurance && isValidMedicalInsurance(lastMedicalInsurance.payment_date);
+
+                                const { month, year } = getCurrentMonthYear();
+                                const currentMonthPayments = userPayments.filter(
+                                  (p) => {
+                                    const paymentDate = new Date(p.payment_date);
+                                    return (
+                                      paymentDate.getMonth() === month - 1 &&
+                                      paymentDate.getFullYear() === year &&
+                                      p.concept !== "Seguro Médico" &&
+                                      p.concept !== "Matrícula"
+                                    );
+                                  }
+                                );
+                                const hasCurrentMonthPayment = currentMonthPayments.length > 0;
+
+                                if (!hasValidMedicalInsurance && !hasCurrentMonthPayment) {
+                                  return (
+                                    <span className="inline-block px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">
+                                      Pendiente de pago
+                                    </span>
+                                  );
+                                } else if (!hasValidMedicalInsurance) {
+                                  return (
+                                    <span className="inline-block px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">
+                                      Seguro Médico Pendiente
+                                    </span>
+                                  );
+                                } else if (!hasCurrentMonthPayment) {
+                                  return (
+                                    <span className="inline-block px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">
+                                      Cuota Mensual Pendiente
+                                    </span>
+                                  );
+                                }
+                              })()}
+                            </div>
+                          ) : (
+                            <span className="inline-block px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
+                              Activo
+                            </span>
+                          )}</div></div>
+                          </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!isEditing ? (
+                  <div className="space-y-6">
+                    {/* Datos del usuario */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Fila 2: Nombre y DNI */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Nombre completo
+                        </label>
+                        <p className="text-gray-900">
+                          {targetUser.name || "No especificado"} {targetUser.first_surname || "No especificado"} {targetUser.second_surname || "No especificado"}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          DNI
+                        </label>
+                        <p className="text-gray-900">
+                          {targetUser.dni || "No especificado"}
+                        </p>
+                      </div>
+
+                      {/* Fila 3: Email y Teléfono */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Email
+                        </label>
+                        <p className="text-gray-900">{targetUser.email}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Teléfono
+                        </label>
+                        <p className="text-gray-900">
+                          {targetUser.phone || "No especificado"}
+                        </p>
+                      </div>
+                      <div className="md:hidden">
+                        <label className="block text-sm font-medium text-gray-700">Estado</label>
+                      {targetUser.status === "suspended" ? (
+                            <span className="inline-block px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">
+                              Suspendido
+                            </span>
+                          ) : targetUser.status === "pending" ? (
+                            <div className="flex items-center gap-2">
+                              {(() => {
+                                const lastMedicalInsurance = userPayments.find(
+                                  (p) => p.concept === "Seguro Médico"
+                                );
+                                const hasValidMedicalInsurance = lastMedicalInsurance && isValidMedicalInsurance(lastMedicalInsurance.payment_date);
+
+                                const { month, year } = getCurrentMonthYear();
+                                const currentMonthPayments = userPayments.filter(
+                                  (p) => {
+                                    const paymentDate = new Date(p.payment_date);
+                                    return (
+                                      paymentDate.getMonth() === month - 1 &&
+                                      paymentDate.getFullYear() === year &&
+                                      p.concept !== "Seguro Médico" &&
+                                      p.concept !== "Matrícula"
+                                    );
+                                  }
+                                );
+                                const hasCurrentMonthPayment = currentMonthPayments.length > 0;
+
+                                if (!hasValidMedicalInsurance && !hasCurrentMonthPayment) {
+                                  return (
+                                    <span className="inline-block px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">
+                                      Pendiente de pago
+                                    </span>
+                                  );
+                                } else if (!hasValidMedicalInsurance) {
+                                  return (
+                                    <span className="inline-block px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">
+                                      Seguro Médico Pendiente
+                                    </span>
+                                  );
+                                } else if (!hasCurrentMonthPayment) {
+                                  return (
+                                    <span className="inline-block px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">
+                                      Cuota Mensual Pendiente
+                                    </span>
+                                  );
+                                }
+                              })()}
+                            </div>
+                          ) : (
+                            <span className="inline-block px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
+                              Activo
+                            </span>
+                          )}
                       </div>
                     </div>
 
@@ -1144,6 +1303,15 @@ export default function UserDetailPage({
                           ? "Activar cuenta"
                           : "Suspender cuenta"}
                       </Button>
+                      {targetUser.role !== "admin" && isAdmin && (
+                        <Button
+                          variant="destructive"
+                          className="text-white"
+                          onClick={handleDeleteUser}
+                        >
+                          Eliminar usuario
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -1355,6 +1523,14 @@ export default function UserDetailPage({
         onClose={() => setShowEditPaymentDialog(false)}
         payment={selectedPayment}
         onSave={fetchUserData}
+      />
+
+      {/* Dialog para confirmar eliminación de usuario */}
+      <DeleteUserDialog
+        isOpen={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+        onConfirm={handleConfirmDelete}
+        userName={targetUser?.name || ""}
       />
     </div>
   );

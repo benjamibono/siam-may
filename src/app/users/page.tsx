@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
 
@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Shield, User } from "lucide-react";
+import { Search, Shield, User, CircleCheck, CircleX, CircleDollarSign } from "lucide-react";
 import type { Tables } from "@/lib/supabase";
 
 export default function UsersPage() {
@@ -21,17 +21,7 @@ export default function UsersPage() {
     "all" | "active" | "pending" | "suspended"
   >("all");
 
-  useEffect(() => {
-    if (!isLoading) {
-      if (!user || (!isAdmin && !isStaff)) {
-        router.push("/");
-        return;
-      }
-      fetchUsers();
-    }
-  }, [user, isAdmin, isStaff, isLoading, router]);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
@@ -65,7 +55,17 @@ export default function UsersPage() {
     } finally {
       setLoadingUsers(false);
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      if (!user || (!isAdmin && !isStaff)) {
+        router.push("/");
+        return;
+      }
+      fetchUsers();
+    }
+  }, [user, isAdmin, isStaff, isLoading, router, fetchUsers]);
 
   // Filtrar usuarios excluyendo el usuario actual
   const usersExcludingCurrent = users.filter((u) => u.id !== user?.id);
@@ -92,6 +92,13 @@ export default function UsersPage() {
       u.dni?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  //Ordenar por tipo de usuario y orden alfabético
+  filteredUsers.sort((a, b) => {
+    if (a.role === b.role) {
+      return a.name?.localeCompare(b.name || "") || 0;
+    }
+    return a.role.localeCompare(b.role || "") || 0;
+  });
   // Aplicar filtro por tipo
   if (filterType !== "all") {
     filteredUsers = filteredUsers.filter((u) => u.status === filterType);
@@ -142,24 +149,14 @@ export default function UsersPage() {
   const getRoleIcon = (role: string) => {
     switch (role) {
       case "admin":
-        return <Shield className="h-4 w-4 text-red-600" />;
+        return <Shield className="h-4 w-4 md:h-6 md:w-6 text-red-600" />;
       case "staff":
-        return <User className="h-4 w-4 text-blue-600" />;
+        return <User className="h-4 w-4 md:h-6 md:w-6 text-blue-600" />;
       default:
-        return <User className="h-4 w-4 text-gray-600" />;
+        return <User className="h-4 w-4 md:h-6 md:w-6 text-gray-600" />;
     }
   };
 
-  const getRoleText = (role: string) => {
-    switch (role) {
-      case "admin":
-        return "Administrador";
-      case "staff":
-        return "Staff";
-      default:
-        return "Usuario";
-    }
-  };
 
   if (isLoading || loadingUsers) {
     return (
@@ -180,71 +177,47 @@ export default function UsersPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-4">
       <div className="max-w-6xl mx-auto px-2">
-        {/* Cards estadísticas */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
-          <Card
-            className={`cursor-pointer transition-all hover:shadow-md ${
-              filterType === "all"
-                ? "ring-2 ring-blue-500 bg-blue-50"
-                : "hover:bg-gray-50"
-            }`}
+        {/* Stats */}
+        <div className="grid grid-cols-4 gap-2 mb-4">
+          <button
             onClick={() => setFilterType("all")}
-          >
-            <CardContent className="text-center">
-              <div className="text-xl font-bold text-gray-800">
-                {totalUsers}
-              </div>
-              <div className="text-sm text-gray-600">Total Usuarios</div>
-            </CardContent>
-          </Card>
-
-          <Card
-            className={`cursor-pointer transition-all hover:shadow-md ${
-              filterType === "active"
-                ? "ring-2 ring-green-500 bg-green-50"
-                : "hover:bg-gray-50"
+            className={`p-2 rounded-lg transition-all ${
+              filterType === "all" ? "bg-blue-50 ring-2 ring-blue-500" : "bg-white hover:bg-gray-50"
             }`}
+          >
+            <User className="h-4 w-4 md:h-6 md:w-6 text-gray-600 mx-auto mb-1" />
+            <div className="text-lg font-semibold">{totalUsers}</div>
+          </button>
+
+          <button
             onClick={() => setFilterType("active")}
-          >
-            <CardContent className="text-center">
-              <div className="text-xl font-bold text-green-600">
-                {activeUsers}
-              </div>
-              <div className="text-sm text-gray-600">Activos</div>
-            </CardContent>
-          </Card>
-
-          <Card
-            className={`cursor-pointer transition-all hover:shadow-md ${
-              filterType === "pending"
-                ? "ring-2 ring-yellow-500 bg-yellow-50"
-                : "hover:bg-gray-50"
+            className={`p-2 rounded-lg transition-all ${
+              filterType === "active" ? "bg-green-50 ring-2 ring-green-500" : "bg-white hover:bg-gray-50"
             }`}
+          >
+            <CircleCheck className="h-4 w-4 md:h-6 md:w-6 text-green-600 mx-auto mb-1" />
+            <div className="text-lg font-semibold">{activeUsers}</div>
+          </button>
+
+          <button
             onClick={() => setFilterType("pending")}
-          >
-            <CardContent className="text-center">
-              <div className="text-xl font-bold text-yellow-600">
-                {pendingUsers}
-              </div>
-              <div className="text-sm text-gray-600">Pendientes</div>
-            </CardContent>
-          </Card>
-
-          <Card
-            className={`cursor-pointer transition-all hover:shadow-md ${
-              filterType === "suspended"
-                ? "ring-2 ring-red-500 bg-red-50"
-                : "hover:bg-gray-50"
+            className={`p-2 rounded-lg transition-all ${
+              filterType === "pending" ? "bg-yellow-50 ring-2 ring-yellow-500" : "bg-white hover:bg-gray-50"
             }`}
-            onClick={() => setFilterType("suspended")}
           >
-            <CardContent className="text-center">
-              <div className="text-xl font-bold text-red-600">
-                {suspendedUsers}
-              </div>
-              <div className="text-sm text-gray-600">Suspendidos</div>
-            </CardContent>
-          </Card>
+            <CircleDollarSign className="h-4 w-4 md:h-6 md:w-6 text-yellow-600 mx-auto mb-1" />
+            <div className="text-lg font-semibold">{pendingUsers}</div>
+          </button>
+
+          <button
+            onClick={() => setFilterType("suspended")}
+            className={`p-2 rounded-lg transition-all ${
+              filterType === "suspended" ? "bg-red-50 ring-2 ring-red-500" : "bg-white hover:bg-gray-50"
+            }`}
+          >
+            <CircleX className="h-4 w-4 md:h-6 md:w-6 text-red-600 mx-auto mb-1" />
+            <div className="text-lg font-semibold">{suspendedUsers}</div>
+          </button>
         </div>
 
         {/* Búsqueda */}
@@ -270,8 +243,7 @@ export default function UsersPage() {
               <Card className="hover:bg-gray-50 transition-colors cursor-pointer hover:shadow-md">
                 <CardContent className="py-2">
                   <div className="flex flex-col gap-2">
-                    {/* Primera línea: icono y nombre completo */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between gap-2">
                       {getRoleIcon(userItem.role)}
                       <h3 className="font-semibold text-lg">
                         {userItem.name && userItem.first_surname
@@ -280,35 +252,14 @@ export default function UsersPage() {
                             }`
                           : userItem.email}
                       </h3>
-                    </div>
-
-                    {/* Segunda línea: role y status */}
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`px-2 py-1 text-xs rounded-full ${
-                          userItem.role === "admin"
-                            ? "bg-red-100 text-red-800"
-                            : userItem.role === "staff"
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-gray-100 text-gray-800"
-                        }`}
-                      >
-                        {getRoleText(userItem.role)}
-                      </span>
-                      <span
-                        className={`px-2 py-1 text-xs rounded-full ${
-                          userItem.status === "active"
-                            ? "bg-green-100 text-green-800"
-                            : userItem.status === "pending"
-                            ? "bg-yellow-100 text-yellow-800"
-                            : "bg-red-100 text-red-800"
-                        }`}
-                      >
-                        {userItem.status === "active"
-                          ? "Activo"
-                          : userItem.status === "pending"
-                          ? "Pendiente de Pago"
-                          : "Suspendido"}
+                      <span className="text-sm text-gray-600">
+                        {userItem.status === "active" ? (
+                          <CircleCheck className="h-4 w-4 md:h-6 md:w-6 text-green-600" />
+                        ) : userItem.status === "pending" ? (
+                          <CircleDollarSign className="h-4 w-4 md:h-6 md:w-6 text-yellow-600" />
+                        ) : (
+                          <CircleX className="h-4 w-4 md:h-6 md:w-6 text-red-600" />
+                        )}
                       </span>
                     </div>
                   </div>

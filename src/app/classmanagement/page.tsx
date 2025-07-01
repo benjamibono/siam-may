@@ -394,7 +394,11 @@ export default function ClassManagementPage() {
       <div className="max-w-6xl mx-auto px-4">
         {/* Header */}
         <div className="mb-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <Button onClick={() => setIsCreating(true)} className="w-full sm:w-auto">
+              <Plus className="h-4 w-4" />
+              Nueva Clase
+            </Button>
             {/* Filtros */}
             <div className="flex gap-1 items-center flex-wrap">
               {filterOptions.map((option) => (
@@ -419,10 +423,6 @@ export default function ClassManagementPage() {
                 </button>
               )}
             </div>
-            <Button onClick={() => setIsCreating(true)}>
-              <Plus className="h-4 w-4" />
-              Nueva Clase
-            </Button>
           </div>
         </div>
 

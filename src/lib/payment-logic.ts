@@ -19,10 +19,31 @@ export function getCurrentMonthYear(): { month: number; year: number } {
 }
 
 /**
- * Determina si un usuario puede inscribirse a clases según su estado y la fecha actual
+ * Verifica si un pago de seguro médico es válido (no ha pasado más de un año)
  */
-export function canEnrollInClasses(userStatus: string): boolean {
+export function isValidMedicalInsurance(lastMedicalInsuranceDate: string | null): boolean {
+  if (!lastMedicalInsuranceDate) return false;
+
+  const insuranceDate = new Date(lastMedicalInsuranceDate);
+  const now = new Date();
+  
+  // Calcular la diferencia en años
+  const yearDiff = now.getFullYear() - insuranceDate.getFullYear();
+  const monthDiff = now.getMonth() - insuranceDate.getMonth();
+  const dayDiff = now.getDate() - insuranceDate.getDate();
+
+  // El seguro es válido si no ha pasado más de un año
+  return yearDiff === 0 || (yearDiff === 1 && monthDiff < 0) || (yearDiff === 1 && monthDiff === 0 && dayDiff < 0);
+}
+
+/**
+ * Determina si un usuario puede inscribirse a clases según su estado, la fecha actual y el seguro médico
+ */
+export function canEnrollInClasses(userStatus: string, hasMedicalInsurance: boolean = false): boolean {
   const dayOfMonth = getCurrentDayOfMonth();
+
+  // Si no tiene seguro médico válido, no puede inscribirse
+  if (!hasMedicalInsurance) return false;
 
   switch (userStatus) {
     case "active":
@@ -40,7 +61,11 @@ export function canEnrollInClasses(userStatus: string): boolean {
 /**
  * Obtiene el mensaje de estado para mostrar al usuario
  */
-export function getEnrollmentStatusMessage(userStatus: string): string {
+export function getEnrollmentStatusMessage(userStatus: string, hasMedicalInsurance: boolean = false): string {
+  if (!hasMedicalInsurance) {
+    return "Necesitas tener un seguro médico válido para poder inscribirte en las clases.";
+  }
+
   const dayOfMonth = getCurrentDayOfMonth();
 
   switch (userStatus) {
@@ -83,6 +108,8 @@ export function canEnrollInClassType(
       return true; // Puede inscribirse en ambas
     case "Matrícula":
       return false; // La matrícula no da acceso a clases
+    case "Seguro Médico":
+      return false; // El seguro médico no da acceso a clases
     default:
       return false;
   }
@@ -112,6 +139,8 @@ export function getClassRestrictionMessage(
       return "";
     case "Matrícula":
       return "La matrícula no incluye acceso a clases. Necesitas pagar la cuota mensual correspondiente.";
+    case "Seguro Médico":
+      return "El seguro médico no incluye acceso a clases. Necesitas pagar la cuota mensual correspondiente.";
     default:
       return "Tipo de pago no reconocido.";
   }
@@ -131,22 +160,29 @@ export function isPaymentFromCurrentMonth(paymentDate: string): boolean {
 }
 
 /**
- * Determina el nuevo estado de un usuario según su estado actual y los pagos
+ * Determina el nuevo estado de un usuario según su estado actual, los pagos y el seguro médico
  */
 export function getNewUserStatus(
   currentStatus: string,
-  hasCurrentMonthPayment: boolean
+  hasCurrentMonthPayment: boolean,
+  role: string = "user",
+  hasMedicalInsurance: boolean = false
 ): string {
-  const dayOfMonth = getCurrentDayOfMonth();
-
-  // Si tiene pago del mes actual, siempre activo
-  if (hasCurrentMonthPayment) {
+  // Admins and staff are always active and exempt from payment status changes
+  if (role === "admin" || role === "staff") {
     return "active";
   }
 
-  // Si no tiene pago del mes actual, determinar estado según el día del mes
+  const dayOfMonth = getCurrentDayOfMonth();
+
+  // Si tiene pago del mes actual y seguro médico válido, activo
+  if (hasCurrentMonthPayment && hasMedicalInsurance) {
+    return "active";
+  }
+
+  // Si no tiene seguro médico o no tiene pago del mes actual
   if (dayOfMonth >= 15) {
-    // A partir del día 15, suspender automáticamente si no hay pago
+    // A partir del día 15, suspender automáticamente
     return "suspended";
   } else if (dayOfMonth >= 1 && dayOfMonth <= 5) {
     // Del día 1 al 5, estado pending (período de gracia)

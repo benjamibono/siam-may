@@ -6,6 +6,14 @@ import { Button } from "@/components/ui/button";
 import { useProfile } from "@/hooks/useProfile";
 import { toast } from "sonner";
 import Image from "next/image";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export function AuthForm() {
   const { user } = useProfile();
@@ -13,6 +21,7 @@ export function AuthForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showWelcomeDialog, setShowWelcomeDialog] = useState(false);
   const [profileData, setProfileData] = useState({
     name: "",
     first_surname: "",
@@ -98,6 +107,7 @@ export function AuthForm() {
               second_surname: profileData.second_surname,
               dni: profileData.dni,
               phone: profileData.phone,
+              status: "pending",
               updated_at: new Date().toISOString(),
             })
             .eq("id", data.user.id);
@@ -105,13 +115,18 @@ export function AuthForm() {
           if (profileError) {
             toast.error("Usuario creado pero error al actualizar perfil");
           } else {
-            toast.success(
-              "¡Cuenta creada exitosamente! Puedes iniciar sesión."
-            );
-            // Cambiar a modo login después del registro exitoso
-            setIsLogin(true);
+            setShowWelcomeDialog(true);
+            // Reset form
+            setEmail("");
             setPassword("");
             setConfirmPassword("");
+            setProfileData({
+              name: "",
+              first_surname: "",
+              second_surname: "",
+              dni: "",
+              phone: "",
+            });
           }
         }
       }
@@ -127,284 +142,328 @@ export function AuthForm() {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 max-h-[95vh] overflow-y-auto">
-        {/* Logo */}
-        <div className="flex justify-center mb-8">
-          <div className="w-24 h-24 relative">
-            <Image
-              src="/MMA2.webp"
-              alt="Siam May Logo"
-              fill
-              className="object-contain rounded-2xl"
-            />
+    <>
+      <Dialog open={showWelcomeDialog} onOpenChange={setShowWelcomeDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>¡Bienvenido a SIAM!</DialogTitle>
+            <DialogDescription className="space-y-4 pt-4">
+              <p>
+                ¡Gracias por registrarte! Aquí tienes una breve guía de cómo funciona la aplicación:
+              </p>
+              <div className="space-y-2">
+                <h4 className="font-semibold">Estado de tu cuenta</h4>
+                <p>
+                  Tu cuenta está actualmente en estado &quot;pendiente&quot; hasta que realices tu primer pago.
+                  Una vez realizado, podrás acceder a todas las funcionalidades.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <h4 className="font-semibold">Inscripción a clases</h4>
+                <p>
+                  Podrás inscribirte a clases durante los primeros 5 días del mes.
+                  Después de este período, necesitarás tener un pago registrado para poder inscribirte.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <h4 className="font-semibold">Pagos</h4>
+                <p>
+                  Los pagos se realizan mensualmente. Puedes ver tu historial de pagos
+                  y el estado de tu cuenta en tu perfil.
+                </p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => {
+              setShowWelcomeDialog(false);
+              setIsLogin(true);
+            }}>
+              Entendido, iniciar sesión
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 max-h-[95vh] overflow-y-auto">
+          {/* Logo */}
+          <div className="flex justify-center mb-8">
+            <div className="w-24 h-24 relative">
+              <Image
+                src="/MMA2.webp"
+                alt="Siam May Logo"
+                fill
+                className="object-contain rounded-2xl"
+              />
+            </div>
           </div>
+
+          {/* Título */}
+          <h1 className="text-2xl font-bold text-center text-gray-900 mb-2">
+            {isLogin ? "Iniciar Sesión" : "Crea Tu Cuenta"}
+          </h1>
+
+          {/* Subtítulo con enlace */}
+          <p className="text-center text-gray-600 mb-8">
+            {isLogin ? (
+              <>
+                ¿No tienes una cuenta?{" "}
+                <button
+                  type="button"
+                  onClick={() => setIsLogin(false)}
+                  className="text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Regístrate aquí
+                </button>
+              </>
+            ) : (
+              <>
+                ¿Ya tienes una cuenta?{" "}
+                <button
+                  type="button"
+                  onClick={() => setIsLogin(true)}
+                  className="text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Inicia sesión aquí
+                </button>
+              </>
+            )}
+          </p>
+
+          {/* Formulario */}
+          <form onSubmit={handleAuth} className="space-y-6">
+            {isLogin ? (
+              // Formulario de Login
+              <>
+                <div>
+                  <label
+                    htmlFor="email"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Email
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="Ingresa tu email"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="password"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Contraseña
+                  </label>
+                  <input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="Ingresa tu contraseña"
+                  />
+                  <div className="text-right mt-2">
+                    <button
+                      type="button"
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      ¿Olvidaste tu contraseña?
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              // Formulario de Registro
+              <>
+                <h1 className="text-xl font-bold text-center text-gray-900 mb-2">
+                  Todos los campos son obligatorios
+                </h1>
+                <div>
+                  <label
+                    htmlFor="reg-email"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Email
+                  </label>
+                  <input
+                    id="reg-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="Ingresa tu email"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="reg-password"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Contraseña
+                  </label>
+                  <input
+                    id="reg-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="Ingresa tu contraseña"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="confirm-password"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Confirmar contraseña
+                  </label>
+                  <input
+                    id="confirm-password"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="Confirmar contraseña"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="reg-name"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Nombre
+                  </label>
+                  <input
+                    id="reg-name"
+                    type="text"
+                    value={profileData.name}
+                    onChange={(e) =>
+                      setProfileData({ ...profileData, name: e.target.value })
+                    }
+                    required
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="Ingresa tu nombre"
+                  />
+                </div>
+                {/* Campos adicionales para registro */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label
+                      htmlFor="first_surname"
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                    >
+                      Primer Apellido
+                    </label>
+                    <input
+                      id="first_surname"
+                      type="text"
+                      value={profileData.first_surname}
+                      onChange={(e) =>
+                        setProfileData({
+                          ...profileData,
+                          first_surname: e.target.value,
+                        })
+                      }
+                      required
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      placeholder="Apellido"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="second_surname"
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                    >
+                      Segundo Apellido
+                    </label>
+                    <input
+                      id="second_surname"
+                      type="text"
+                      value={profileData.second_surname}
+                      onChange={(e) =>
+                        setProfileData({
+                          ...profileData,
+                          second_surname: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      placeholder="Apellido"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label
+                      htmlFor="dni"
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                    >
+                      DNI
+                    </label>
+                    <input
+                      id="dni"
+                      type="text"
+                      value={profileData.dni}
+                      onChange={(e) =>
+                        setProfileData({ ...profileData, dni: e.target.value })
+                      }
+                      required
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      placeholder="12345678X"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="phone"
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                    >
+                      Teléfono
+                    </label>
+                    <input
+                      id="phone"
+                      type="tel"
+                      value={profileData.phone}
+                      onChange={(e) =>
+                        setProfileData({ ...profileData, phone: e.target.value })
+                      }
+                      required
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      placeholder="666123456"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Botón de acción */}
+            <Button
+              type="submit"
+              className="w-full py-3 bg-black hover:bg-gray-800 text-white font-medium rounded-lg transition-colors"
+              disabled={loading}
+            >
+              {loading
+                ? "Cargando..."
+                : isLogin
+                ? "Iniciar sesión"
+                : "Crear Cuenta y Empezar"}
+            </Button>
+          </form>
         </div>
-
-        {/* Título */}
-        <h1 className="text-2xl font-bold text-center text-gray-900 mb-2">
-          {isLogin ? "Iniciar Sesión" : "Crea Tu Cuenta"}
-        </h1>
-
-        {/* Subtítulo con enlace */}
-        <p className="text-center text-gray-600 mb-8">
-          {isLogin ? (
-            <>
-              ¿No tienes una cuenta?{" "}
-              <button
-                type="button"
-                onClick={() => setIsLogin(false)}
-                className="text-blue-600 hover:text-blue-800 font-medium"
-              >
-                Regístrate aquí
-              </button>
-            </>
-          ) : (
-            <>
-              ¿Ya tienes una cuenta?{" "}
-              <button
-                type="button"
-                onClick={() => setIsLogin(true)}
-                className="text-blue-600 hover:text-blue-800 font-medium"
-              >
-                Inicia sesión aquí
-              </button>
-            </>
-          )}
-        </p>
-
-        {/* Formulario */}
-        <form onSubmit={handleAuth} className="space-y-6">
-          {isLogin ? (
-            // Formulario de Login
-            <>
-              <div>
-                <label
-                  htmlFor="email"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                  placeholder="Ingresa tu email"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="password"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Contraseña
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                  placeholder="Ingresa tu contraseña"
-                />
-                <div className="text-right mt-2">
-                  <button
-                    type="button"
-                    className="text-sm text-blue-600 hover:text-blue-800"
-                  >
-                    ¿Olvidaste tu contraseña?
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            // Formulario de Registro
-            <>
-              <h1 className="text-xl font-bold text-center text-gray-900 mb-2">
-                Todos los campos son obligatorios
-              </h1>
-              <div>
-                <label
-                  htmlFor="reg-email"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Email
-                </label>
-                <input
-                  id="reg-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                  placeholder="Ingresa tu email"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="reg-password"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Contraseña
-                </label>
-                <input
-                  id="reg-password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                  placeholder="Ingresa tu contraseña"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="confirm-password"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Confirmar contraseña
-                </label>
-                <input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                  placeholder="Confirmar contraseña"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="reg-name"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Nombre
-                </label>
-                <input
-                  id="reg-name"
-                  type="text"
-                  value={profileData.name}
-                  onChange={(e) =>
-                    setProfileData({ ...profileData, name: e.target.value })
-                  }
-                  required
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                  placeholder="Ingresa tu nombre"
-                />
-              </div>
-              {/* Campos adicionales para registro */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label
-                    htmlFor="first_surname"
-                    className="block text-sm font-medium text-gray-700 mb-2"
-                  >
-                    Primer Apellido
-                  </label>
-                  <input
-                    id="first_surname"
-                    type="text"
-                    value={profileData.first_surname}
-                    onChange={(e) =>
-                      setProfileData({
-                        ...profileData,
-                        first_surname: e.target.value,
-                      })
-                    }
-                    required
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                    placeholder="Apellido"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="second_surname"
-                    className="block text-sm font-medium text-gray-700 mb-2"
-                  >
-                    Segundo Apellido
-                  </label>
-                  <input
-                    id="second_surname"
-                    type="text"
-                    value={profileData.second_surname}
-                    onChange={(e) =>
-                      setProfileData({
-                        ...profileData,
-                        second_surname: e.target.value,
-                      })
-                    }
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                    placeholder="Apellido"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label
-                    htmlFor="dni"
-                    className="block text-sm font-medium text-gray-700 mb-2"
-                  >
-                    DNI
-                  </label>
-                  <input
-                    id="dni"
-                    type="text"
-                    value={profileData.dni}
-                    onChange={(e) =>
-                      setProfileData({ ...profileData, dni: e.target.value })
-                    }
-                    required
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                    placeholder="12345678X"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="phone"
-                    className="block text-sm font-medium text-gray-700 mb-2"
-                  >
-                    Teléfono
-                  </label>
-                  <input
-                    id="phone"
-                    type="tel"
-                    value={profileData.phone}
-                    onChange={(e) =>
-                      setProfileData({ ...profileData, phone: e.target.value })
-                    }
-                    required
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                    placeholder="666123456"
-                  />
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Botón de acción */}
-          <Button
-            type="submit"
-            className="w-full py-3 bg-black hover:bg-gray-800 text-white font-medium rounded-lg transition-colors"
-            disabled={loading}
-          >
-            {loading
-              ? "Cargando..."
-              : isLogin
-              ? "Iniciar sesión"
-              : "Crear Cuenta y Empezar"}
-          </Button>
-        </form>
       </div>
-    </div>
+    </>
   );
 }

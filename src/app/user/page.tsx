@@ -140,39 +140,23 @@ export default function UserProfilePage() {
       <div className="max-w-6xl mx-auto px-4">
         <Card>
           <CardHeader>
-            <CardTitle>Información Personal</CardTitle>
+            <CardTitle className="flex items-center gap-2">Información Personal <span className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                    {profile?.role === "admin"
+                      ? "Administrador"
+                      : profile?.role === "staff"
+                      ? "Staff"
+                      : "Usuario"}
+                  </span></CardTitle>
           </CardHeader>
           <CardContent>
             {!isEditing ? (
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col md:grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
-                    Email
-                  </label>
-                  <p className="text-gray-900">{user.email}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Nombre
+                    Nombre completo
                   </label>
                   <p className="text-gray-900">
-                    {profile?.name || "No especificado"}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Primer Apellido
-                  </label>
-                  <p className="text-gray-900">
-                    {profile?.first_surname || "No especificado"}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Segundo Apellido
-                  </label>
-                  <p className="text-gray-900">
-                    {profile?.second_surname || "No especificado"}
+                    {profile?.name || "No especificado"} {profile?.first_surname || "No especificado"} {profile?.second_surname || "No especificado"}
                   </p>
                 </div>
                 <div>
@@ -193,19 +177,13 @@ export default function UserProfilePage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
-                    Rol
+                    Email
                   </label>
-                  <span className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-                    {profile?.role === "admin"
-                      ? "Administrador"
-                      : profile?.role === "staff"
-                      ? "Staff"
-                      : "Usuario"}
-                  </span>
+                  <p className="text-gray-900">{user.email}</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-col md:flex-row gap-2">
                   <Button onClick={() => setIsEditing(true)}>
-                    Editar datos
+                    Editar perfil
                   </Button>
                   <Button
                     variant="outline"

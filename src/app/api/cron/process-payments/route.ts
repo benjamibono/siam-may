@@ -14,7 +14,8 @@ export async function GET(request: NextRequest) {
     const { data: users, error: usersError } = await supabaseAdmin
       .from("profiles")
       .select("*")
-      .neq("status", "suspended");
+      .neq("status", "suspended")
+      .in("role", ["user"]);
 
     if (usersError) throw usersError;
 
@@ -59,7 +60,8 @@ export async function GET(request: NextRequest) {
 
         const newStatus = getNewUserStatus(
           userProfile.status,
-          payments && payments.length > 0
+          payments && payments.length > 0,
+          userProfile.role
         );
 
         // Solo actualizar si el estado cambió

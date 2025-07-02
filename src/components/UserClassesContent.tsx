@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -62,14 +62,7 @@ export function UserClassesContent() {
     message: string;
   }>({ canEnroll: false, message: "" });
 
-  useEffect(() => {
-    if (user && profile) {
-      fetchClasses();
-      checkEnrollmentStatus();
-    }
-  }, [user, profile]);
-
-  const checkEnrollmentStatus = async () => {
+  const checkEnrollmentStatus = useCallback(async () => {
     if (!user || !profile) return;
 
     try {
@@ -87,9 +80,9 @@ export function UserClassesContent() {
         message: "Error al verificar el estado de inscripción",
       });
     }
-  };
+  }, [user, profile]);
 
-  const fetchClasses = async () => {
+  const fetchClasses = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -134,7 +127,14 @@ export function UserClassesContent() {
     } finally {
       setLoadingClasses(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user && profile) {
+      fetchClasses();
+      checkEnrollmentStatus();
+    }
+  }, [user, profile, fetchClasses, checkEnrollmentStatus]);
 
   const handleEnrollment = async (classId: string, isEnrolled: boolean) => {
     if (!user || !profile) return;

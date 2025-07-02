@@ -7,13 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import Image from "next/image";
-import {
-  Calendar,
-  Users,
-  Clock,
-  ChevronDown,
-  ChevronRight,
-} from "lucide-react";
+import { Users, Clock, ChevronDown, ChevronRight } from "lucide-react";
 import type { Tables } from "@/lib/supabase";
 import {
   getCurrentMonthYear,

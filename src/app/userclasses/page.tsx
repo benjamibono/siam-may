@@ -389,7 +389,7 @@ export default function UserClassesPage() {
       <div className="max-w-4xl mx-auto px-4">
         {/* Filtros */}
         <div className="mb-6">
-          <div className="flex gap-2 items-center flex-balance">
+          <div className="flex gap-2 items-center flex-balance justify-evenly">
             {filterOptions.map((option) => (
               <button
                 key={option.id}

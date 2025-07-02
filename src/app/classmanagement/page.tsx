@@ -15,6 +15,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { 
+  parseSchedule, 
+  formatScheduleForManagement, 
+  formatDaysForManagement,
+  sortDays 
+} from "@/lib/utils";
 
 interface ClassWithEnrollments extends Tables<"classes"> {
   enrolled_users: {
@@ -61,7 +67,7 @@ export default function ClassManagementPage() {
     capacity: 20,
   });
 
-  // Nuevos estados para los selectores mejorados
+  // Estados para los selectores mejorados
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
@@ -72,8 +78,6 @@ export default function ClassManagementPage() {
   const filterOptions = [
     { id: "MMA", label: "MMA" },
     { id: "Muay Thai", label: "Muay Thai" },
-    { id: "Mañana", label: "Mañana" },
-    { id: "Tarde", label: "Tarde" },
     { id: "Niños", label: "Niños" },
   ];
 
@@ -83,16 +87,6 @@ export default function ClassManagementPage() {
         ? prev.filter((f) => f !== filterId)
         : [...prev, filterId]
     );
-  };
-
-  const isTimeInRange = (timeStr: string, range: "morning" | "afternoon") => {
-    if (!timeStr) return false;
-    const [hours] = timeStr.split(":").map(Number);
-    if (range === "morning") {
-      return hours >= 0 && hours < 14;
-    } else {
-      return hours >= 14 && hours < 24;
-    }
   };
 
   const sortClasses = (classes: ClassWithEnrollments[]) => {
@@ -117,18 +111,12 @@ export default function ClassManagementPage() {
     if (activeFilters.length === 0) return sortClasses(classes);
 
     const filtered = classes.filter((classItem) => {
-      const parsed = parseSchedule(classItem.schedule);
-
       return activeFilters.every((filter) => {
         switch (filter) {
           case "MMA":
             return classItem.name.toLowerCase().includes("mma");
           case "Muay Thai":
             return classItem.name.toLowerCase().includes("muay thai");
-          case "Mañana":
-            return isTimeInRange(parsed.start, "morning");
-          case "Tarde":
-            return isTimeInRange(parsed.start, "afternoon");
           case "Niños":
             return (
               classItem.name.toLowerCase().includes("niños") ||
@@ -153,43 +141,6 @@ export default function ClassManagementPage() {
     { value: "Sábado", label: "Sábado" },
     { value: "Domingo", label: "Domingo" },
   ];
-
-  // Funciones auxiliares
-  const formatSchedule = (days: string[], start: string, end: string) => {
-    if (days.length === 0 || !start || !end) return "";
-
-    let daysString = "";
-    if (days.length === 1) {
-      daysString = days[0];
-    } else if (days.length === 2) {
-      daysString = `${days[0]} y ${days[1]}`;
-    } else {
-      daysString = `${days.slice(0, -1).join(", ")} y ${days[days.length - 1]}`;
-    }
-
-    return `${daysString} ${start}-${end}`;
-  };
-
-  const formatDaysOnly = (days: string[]) => {
-    if (days.length === 0) return "Sin días definidos";
-    if (days.length === 1) return days[0];
-    if (days.length === 2) return `${days[0]} y ${days[1]}`;
-    return `${days.slice(0, -1).join(", ")} y ${days[days.length - 1]}`;
-  };
-
-  const parseSchedule = (schedule: string) => {
-    if (!schedule) return { days: [], start: "", end: "" };
-
-    // Intentar parsear el formato "Lunes, Miércoles 19:00-20:30"
-    const match = schedule.match(/^(.+?)\s+(\d{2}:\d{2})-(\d{2}:\d{2})$/);
-    if (match) {
-      const [, daysStr, start, end] = match;
-      const days = daysStr.split(/,\s*(?:y\s+)?/);
-      return { days, start, end };
-    }
-
-    return { days: [], start: "", end: "" };
-  };
 
   const handleDayToggle = (day: string) => {
     setSelectedDays((prev) =>
@@ -252,8 +203,8 @@ export default function ClassManagementPage() {
       return;
     }
 
-    // Crear el horario formateado a partir de los selectores
-    const schedule = formatSchedule(selectedDays, startTime, endTime);
+    // Crear el horario formateado con días ordenados
+    const schedule = formatScheduleForManagement(selectedDays, startTime, endTime);
 
     const dataToSave = {
       ...formData,
@@ -302,9 +253,6 @@ export default function ClassManagementPage() {
   };
 
   const handleEdit = (classItem: ClassWithEnrollments) => {
-    // Parsear el horario existente
-    const parsed = parseSchedule(classItem.schedule);
-
     setFormData({
       name: classItem.name,
       description: classItem.description || "",
@@ -312,10 +260,11 @@ export default function ClassManagementPage() {
       capacity: classItem.capacity,
     });
 
-    // Poblar los selectores
-    setSelectedDays(parsed.days);
-    setStartTime(parsed.start);
-    setEndTime(parsed.end);
+    // Poblar los selectores con los valores del horario existente
+    const { days, start, end } = parseSchedule(classItem.schedule);
+    setSelectedDays(days);
+    setStartTime(start);
+    setEndTime(end);
 
     setEditingClass(classItem);
     setIsCreating(true);
@@ -395,12 +344,16 @@ export default function ClassManagementPage() {
         {/* Header */}
         <div className="mb-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <Button variant="outline" className="w-full sm:w-auto">
+              <Plus className="h-4 w-4" />
+              Nuevo Anuncio
+            </Button>
             <Button onClick={() => setIsCreating(true)} className="w-full sm:w-auto">
               <Plus className="h-4 w-4" />
               Nueva Clase
             </Button>
-            {/* Filtros */}
-            <div className="flex gap-1 items-center flex-wrap">
+              {/* Filtros */}
+            <div className="flex gap-1 items-center flex-wrap justify-evenly">
               {filterOptions.map((option) => (
                 <button
                   key={option.id}
@@ -414,14 +367,6 @@ export default function ClassManagementPage() {
                   {option.label}
                 </button>
               ))}
-              {activeFilters.length > 0 && (
-                <button
-                  onClick={() => setActiveFilters([])}
-                  className="px-3 py-1 text-sm text-gray-500 hover:text-gray-700 underline"
-                >
-                  Limpiar filtros
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -551,7 +496,7 @@ export default function ClassManagementPage() {
                   <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
                     <p className="text-sm text-blue-800">
                       <strong>Horario:</strong>{" "}
-                      {formatSchedule(selectedDays, startTime, endTime)}
+                      {formatScheduleForManagement(sortDays(selectedDays), startTime, endTime)}
                     </p>
                   </div>
                 )}
@@ -595,72 +540,63 @@ export default function ClassManagementPage() {
 
         {/* Lista de clases */}
         <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-          {filterClasses(classes).map((classItem) => (
-            <Card
-              key={classItem.id}
-              className="cursor-pointer hover:shadow-md transition-shadow"
-              onClick={() => handleCardClick(classItem)}
-            >
-              <CardHeader className="pb-1">
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {(() => {
-                      const icon = getClassIcon(
-                        classItem.name,
-                        classItem.description || undefined
-                      );
-                      return (
-                        <Image
-                          src={icon.src}
-                          alt={icon.alt}
-                          width={24}
-                          height={24}
-                        />
-                      );
-                    })()}
-                    <span className="text-base">{classItem.name}</span>
-                  </div>
-                  <div className="flex items-center gap-1 text-sm text-gray-600">
-                    <Clock className="h-4 w-4" />
-                    {(() => {
-                      const parsed = parseSchedule(classItem.schedule);
-                      return parsed.start && parsed.end
+          {filterClasses(classes).map((classItem) => {
+            const parsed = parseSchedule(classItem.schedule);
+            const icon = getClassIcon(classItem.name, classItem.description || undefined);
+            
+            return (
+              <Card
+                key={classItem.id}
+                className="cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => handleCardClick(classItem)}
+              >
+                <CardHeader className="pb-1">
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Image
+                        src={icon.src}
+                        alt={icon.alt}
+                        width={24}
+                        height={24}
+                      />
+                      <span className="text-base">{classItem.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-sm text-gray-600">
+                      <Clock className="h-4 w-4" />
+                      {parsed.start && parsed.end
                         ? `${parsed.start} - ${parsed.end}`
-                        : "Sin horario";
-                    })()}
+                        : "Sin horario"}
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex items-center justify-between text-sm text-gray-600">
+                    <div className="flex items-center gap-1">
+                      <Calendar className="h-4 w-4" />
+                      {formatDaysForManagement(parsed.days)}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Users className="h-4 w-4" />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedClassForEnrollments(classItem);
+                        }}
+                        className="hover:underline"
+                      >
+                        {classItem.enrollment_count}/{classItem.capacity}
+                      </button>
+                    </div>
                   </div>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="flex items-center justify-between text-sm text-gray-600">
-                  <div className="flex items-center gap-1">
-                    <Calendar className="h-4 w-4" />
-                    {(() => {
-                      const parsed = parseSchedule(classItem.schedule);
-                      return formatDaysOnly(parsed.days);
-                    })()}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Users className="h-4 w-4" />
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedClassForEnrollments(classItem);
-                      }}
-                      className="hover:underline"
-                    >
-                      {classItem.enrollment_count}/{classItem.capacity}
-                    </button>
-                  </div>
-                </div>
-                {classItem.description && (
-                  <p className="text-sm text-gray-600 mt-2 line-clamp-2">
-                    {classItem.description}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                  {classItem.description && (
+                    <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+                      {classItem.description}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
         {filterClasses(classes).length === 0 && classes.length > 0 && (

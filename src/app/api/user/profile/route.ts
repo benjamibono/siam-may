@@ -1,46 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { withRateLimit, getUserIdentifier } from "@/lib/rate-limit";
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  }
-);
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-async function getAuthenticatedUser(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader) return null;
-
-  const token = authHeader.replace("Bearer ", "");
-
-  try {
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser(token);
-    if (error || !user) return null;
-    return user;
-  } catch {
-    return null;
-  }
-}
+import { supabaseAdmin } from "@/lib/supabase-admin";
+import { requireRole } from "@/lib/auth";
 
 async function getHandler(request: NextRequest): Promise<NextResponse> {
-  const user = await getAuthenticatedUser(request);
-  if (!user) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const authResult = await requireRole(request, ["user", "admin", "staff"]);
+  if ("error" in authResult) {
+    return authResult.error;
   }
+  const { user } = authResult;
 
   try {
     // Obtener perfil del usuario

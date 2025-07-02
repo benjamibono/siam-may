@@ -1,37 +1,12 @@
 // Lógica de horarios y reinicio automático de clases
 
-interface ClassSchedule {
-  days: string[];
-  startTime: string;
-  endTime: string;
-}
-
-/**
- * Parsea un horario de clase del formato "Lunes, Miércoles 19:00-20:00"
- */
-export function parseClassSchedule(schedule: string): ClassSchedule {
-  const timeRegex = /(\d{1,2}:\d{2})-(\d{1,2}:\d{2})/;
-  const timeMatch = schedule.match(timeRegex);
-
-  if (!timeMatch) {
-    return { days: [], startTime: "", endTime: "" };
-  }
-
-  const [, startTime, endTime] = timeMatch;
-  const daysText = schedule.replace(timeRegex, "").trim().replace(/,$/, "");
-  const days = daysText
-    .split(/,\s*(?:y\s+)?/)
-    .map((day) => day.trim())
-    .filter(Boolean);
-
-  return { days, startTime, endTime };
-}
+import { parseSchedule } from "./utils";
 
 /**
  * Obtiene el próximo día de clase desde hoy
  */
 export function getNextClassDay(schedule: string): string {
-  const { days, startTime, endTime } = parseClassSchedule(schedule);
+  const { days, start: startTime, end: endTime } = parseSchedule(schedule);
 
   if (days.length === 0 || !startTime || !endTime) {
     return "Horario no válido";
@@ -75,7 +50,7 @@ export function getNextClassDay(schedule: string): string {
   const todayName = dayNames[today];
   if (days.includes(todayName) && currentTime < endTime) {
     if (currentTime < startTime) {
-      return `Hoy ${startTime}-${endTime}`;
+      return `Hoy ${startTime} - ${endTime}`;
     } else {
       return `Ahora (hasta ${endTime})`;
     }
@@ -103,11 +78,11 @@ export function getNextClassDay(schedule: string): string {
 
   // Formatear la fecha
   if (daysToAdd === 1) {
-    return `Mañana ${startTime}-${endTime}`;
+    return `Mañana ${startTime} - ${endTime}`;
   } else if (daysToAdd <= 6) {
-    return `Próximo ${nextDayName} ${startTime}-${endTime}`;
+    return `Próximo ${nextDayName} ${startTime} - ${endTime}`;
   } else {
-    return `${nextDayName} ${startTime}-${endTime}`;
+    return `${nextDayName} ${startTime} - ${endTime}`;
   }
 }
 
@@ -115,7 +90,7 @@ export function getNextClassDay(schedule: string): string {
  * Verifica si una clase ha terminado y debería reiniciarse
  */
 export function shouldResetClass(schedule: string): boolean {
-  const { days, endTime } = parseClassSchedule(schedule);
+  const { days, end: endTime } = parseSchedule(schedule);
 
   if (days.length === 0 || !endTime) {
     return false;
@@ -124,16 +99,6 @@ export function shouldResetClass(schedule: string): boolean {
   const now = new Date();
   const today = now.getDay();
   const currentTime = now.toTimeString().substring(0, 5);
-
-  // const dayMappings: { [key: string]: number } = {
-  //   Domingo: 0,
-  //   Lunes: 1,
-  //   Martes: 2,
-  //   Miércoles: 3,
-  //   Jueves: 4,
-  //   Viernes: 5,
-  //   Sábado: 6,
-  // };
 
   const dayNames = [
     "Domingo",
@@ -161,58 +126,3 @@ export function getClassesToReset(
     .map((cls) => cls.id);
 }
 
-/**
- * Calcula el tiempo restante hasta la próxima clase
- */
-export function getTimeUntilNextClass(schedule: string): string {
-  const { days, startTime } = parseClassSchedule(schedule);
-
-  if (days.length === 0 || !startTime) {
-    return "";
-  }
-
-  const now = new Date();
-  const today = now.getDay();
-  const currentTime = now.toTimeString().substring(0, 5);
-
-  // const dayMappings: { [key: string]: number } = {
-  //   Domingo: 0,
-  //   Lunes: 1,
-  //   Martes: 2,
-  //   Miércoles: 3,
-  //   Jueves: 4,
-  //   Viernes: 5,
-  //   Sábado: 6,
-  // };
-
-  const dayNames = [
-    "Domingo",
-    "Lunes",
-    "Martes",
-    "Miércoles",
-    "Jueves",
-    "Viernes",
-    "Sábado",
-  ];
-
-  // Si hoy es día de clase y aún no empieza
-  const todayName = dayNames[today];
-  if (days.includes(todayName) && currentTime < startTime) {
-    const [currentHour, currentMinute] = currentTime.split(":").map(Number);
-    const [startHour, startMinute] = startTime.split(":").map(Number);
-
-    const currentMinutes = currentHour * 60 + currentMinute;
-    const startMinutes = startHour * 60 + startMinute;
-    const diffMinutes = startMinutes - currentMinutes;
-
-    if (diffMinutes < 60) {
-      return `En ${diffMinutes} minutos`;
-    } else {
-      const hours = Math.floor(diffMinutes / 60);
-      const minutes = diffMinutes % 60;
-      return `En ${hours}h ${minutes}m`;
-    }
-  }
-
-  return "";
-}

@@ -1,47 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { withRateLimit, getUserIdentifier } from "@/lib/rate-limit";
+import { requireRole } from "@/lib/auth";
 
 async function getHandler(request: NextRequest): Promise<NextResponse> {
   try {
-    // Obtener el token de autenticación del header
-    const authHeader = request.headers.get("authorization");
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
-
-    const token = authHeader.split(" ")[1];
-
-    // Verificar el token con supabase admin
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseAdmin.auth.getUser(token);
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Token inválido" }, { status: 401 });
-    }
-
-    // Verificar que el usuario sea admin o staff
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || !profile) {
-      return NextResponse.json(
-        { error: "Usuario no encontrado" },
-        { status: 401 }
-      );
-    }
-
-    if (profile.role !== "admin" && profile.role !== "staff") {
-      return NextResponse.json(
-        { error: "Sin permisos suficientes" },
-        { status: 403 }
-      );
+    // ✅ Verificación de token y rol mediante helper reutilizable
+    const authResult = await requireRole(request, ["admin", "staff"]);
+    if ("error" in authResult) {
+      return authResult.error;
     }
 
     // Obtener las clases

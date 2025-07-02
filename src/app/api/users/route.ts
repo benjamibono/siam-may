@@ -1,74 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabase-admin";
+import { requireRole } from "@/lib/auth";
 
-// Cliente con service role key para operaciones admin
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-    realtime: {
-      params: {
-        eventsPerSecond: -1,
-      },
-    },
-  }
-);
-
-// Cliente normal para verificar el usuario actual
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-    realtime: {
-      params: {
-        eventsPerSecond: -1,
-      },
-    },
-  }
-);
-
-async function verifyAdmin(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader) return null;
-
-  const token = authHeader.replace("Bearer ", "");
-
-  try {
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser(token);
-    if (error || !user) return null;
-
-    // Verificar que el usuario es admin
-    const { data: profile } = await supabaseAdmin
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profile?.role !== "admin") return null;
-
-    return user;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (_error) {
-    return null;
-  }
-}
+// Utilizamos requireRole para asegurar que solo admins puedan acceder
 
 // GET - Obtener todos los usuarios
 export async function GET(request: NextRequest) {
-  const user = await verifyAdmin(request);
-  if (!user) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const authResult = await requireRole(request, ["admin"]);
+  if ("error" in authResult) {
+    return authResult.error;
   }
 
   try {
@@ -91,9 +31,9 @@ export async function GET(request: NextRequest) {
 
 // PUT - Actualizar usuario
 export async function PUT(request: NextRequest) {
-  const user = await verifyAdmin(request);
-  if (!user) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const authResult = await requireRole(request, ["admin"]);
+  if ("error" in authResult) {
+    return authResult.error;
   }
 
   try {
@@ -123,9 +63,9 @@ export async function PUT(request: NextRequest) {
 
 // DELETE - Eliminar usuario
 export async function DELETE(request: NextRequest) {
-  const user = await verifyAdmin(request);
-  if (!user) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const authResult = await requireRole(request, ["admin"]);
+  if ("error" in authResult) {
+    return authResult.error;
   }
 
   try {

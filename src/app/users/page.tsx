@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
 
@@ -10,62 +11,71 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search, Shield, User, CircleCheck, CircleX, CircleDollarSign } from "lucide-react";
 import type { Tables } from "@/lib/supabase";
+import React from "react";
 
 export default function UsersPage() {
   const { user, isLoading, isAdmin, isStaff } = useProfile();
   const router = useRouter();
   const [users, setUsers] = useState<Tables<"profiles">[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<
     "all" | "active" | "pending" | "suspended"
   >("all");
 
-  const fetchUsers = useCallback(async () => {
-    try {
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
+  const fetchUsers = async () => {
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
 
-      if (!token) {
-        toast.error("No autorizado");
-        router.push("/");
-        return;
-      }
-
-      const response = await fetch("/api/users", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          toast.error("No tienes permisos para acceder a esta página");
-          router.push("/");
-          return;
-        }
-        throw new Error("Error al cargar usuarios");
-      }
-
-      const result = await response.json();
-      setUsers(result.data || []);
-    } catch (error: unknown) {
-      console.error("Error fetching users:", error);
-      toast.error("Error al cargar los usuarios");
-    } finally {
-      setLoadingUsers(false);
+    if (!token) {
+      throw new Error("unauthorized");
     }
-  }, [router]);
 
-  useEffect(() => {
+    const response = await fetch("/api/users", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("unauthorized");
+      }
+      throw new Error("fetch_error");
+    }
+
+    const result = await response.json();
+    return result.data as Tables<"profiles">[];
+  };
+
+  const {
+    isLoading: loadingUsers,
+    refetch,
+  } = useQuery({
+    queryKey: ["users"],
+    queryFn: fetchUsers,
+    enabled: false, // activamos manualmente tras verificar permisos
+  });
+
+  React.useEffect(() => {
     if (!isLoading) {
       if (!user || (!isAdmin && !isStaff)) {
         router.push("/");
         return;
       }
-      fetchUsers();
+      refetch()
+        .then((res) => {
+          if (res.data) setUsers(res.data);
+        })
+        .catch((err: Error) => {
+          if (err.message === "unauthorized") {
+            toast.error("No tienes permisos para acceder a esta página");
+            router.push("/");
+          } else {
+            toast.error("Error al cargar los usuarios");
+          }
+        });
     }
-  }, [user, isAdmin, isStaff, isLoading, router, fetchUsers]);
+  }, [user, isAdmin, isStaff, isLoading, refetch, router]);
 
   // Filtrar usuarios excluyendo el usuario actual
   const usersExcludingCurrent = users.filter((u) => u.id !== user?.id);
@@ -221,8 +231,8 @@ export default function UsersPage() {
         </div>
 
         {/* Búsqueda */}
-        <Card className="mb-6">
-          <CardContent className="py-4">
+        <Card className="mb-4">
+          <CardContent className="">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <input
@@ -237,12 +247,12 @@ export default function UsersPage() {
         </Card>
 
         {/* Lista de usuarios con mayor separación */}
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1">
           {filteredUsers.map((userItem) => (
             <Link key={userItem.id} href={`/user/${userItem.id}`}>
               <Card className="hover:bg-gray-50 transition-colors cursor-pointer hover:shadow-md">
-                <CardContent className="py-2">
-                  <div className="flex flex-col gap-2">
+                <CardContent>
+                  <div className="flex flex-col">
                     <div className="flex items-center justify-between gap-2">
                       {getRoleIcon(userItem.role)}
                       <h3 className="font-semibold text-lg">

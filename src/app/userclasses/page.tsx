@@ -16,12 +16,12 @@ import {
 } from "lucide-react";
 import type { Tables } from "@/lib/supabase";
 import {
-  // canEnrollInClasses, // Unused import
-  // getEnrollmentStatusMessage, // Unused import
-  // canEnrollInClassType, // Unused import
-  // getClassRestrictionMessage, // Unused import
   getCurrentMonthYear,
 } from "@/lib/payment-logic";
+import { 
+  parseSchedule, 
+  formatClassDaysForUser 
+} from "@/lib/utils";
 
 interface ClassWithEnrollment extends Tables<"classes"> {
   is_enrolled: boolean;
@@ -47,31 +47,6 @@ const getClassIcon = (className: string, description?: string) => {
   // Icono por defecto
   return { src: "/gym.png", alt: "Clase" };
 };
-
-// Función para parsear el horario de clases
-const parseSchedule = (schedule: string) => {
-  if (!schedule) return { days: [], start: "", end: "" };
-
-  // Intentar parsear el formato "Lunes, Miércoles 19:00-20:30"
-  const match = schedule.match(/^(.+?)\s+(\d{2}:\d{2})-(\d{2}:\d{2})$/);
-  if (match) {
-    const [, daysStr, start, end] = match;
-    const days = daysStr.split(/,\s*(?:y\s+)?/);
-    return { days, start, end };
-  }
-
-  return { days: [], start: "", end: "" };
-};
-
-// Función para formatear solo los días
-const formatDaysOnly = (days: string[]) => {
-  if (days.length === 0) return "Sin días definidos";
-  if (days.length === 1) return days[0];
-  if (days.length === 2) return `${days[0]} y ${days[1]}`;
-  return `${days.slice(0, -1).join(", ")} y ${days[days.length - 1]}`;
-};
-
-// Función para manejar inscripciones con validaciones
 
 export default function UserClassesPage() {
   const { user, profile, isLoading } = useProfile();
@@ -303,23 +278,17 @@ export default function UserClassesPage() {
               <Image src={icon.src} alt={icon.alt} width={24} height={24} />
               <span className="text-base">{cls.name}</span>
             </div>
-            <div className="flex items-center gap-1 text-sm text-gray-600">
-              <Clock className="h-4 w-4" />
-              {parsed.start && parsed.end
-                ? `${parsed.start} - ${parsed.end}`
-                : "Sin horario"}
+            <div className="flex items-center gap-1">
+              <Users className="h-4 w-4" />
+              {cls.enrollment_count}/{cls.capacity}
             </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-0 flex flex-col gap-3">
-          <div className="flex items-center justify-between text-sm text-gray-600">
-            <div className="flex items-center gap-1">
-              <Calendar className="h-4 w-4" />
-              {formatDaysOnly(parsed.days)}
-            </div>
-            <div className="flex items-center gap-1">
-              <Users className="h-4 w-4" />
-              {cls.enrollment_count}/{cls.capacity}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1 text-base font-semibold">
+              <Clock className="h-4 w-4" />
+              {formatClassDaysForUser(parsed.days, parsed.start, parsed.end)}
             </div>
           </div>
 

@@ -1,4 +1,4 @@
-import { clsx, type ClassValue } from "clsx"
+import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 
 export function cn(...inputs: ClassValue[]) {
@@ -6,13 +6,10 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 // -----------------------------------------------------------------------------
-// Día de la semana utilities
+// Orden de los días de la semana
 // -----------------------------------------------------------------------------
 
-/**
- * Orden canonico de los dias de la semana usandolo para ordenar.
- */
-export const DAY_ORDER = [
+const DAY_ORDER = [
   "Lunes",
   "Martes",
   "Miércoles",
@@ -32,10 +29,10 @@ export function sortDays(days: string[]): string[] {
 }
 
 // -----------------------------------------------------------------------------
-// Formateo de strings de dias y horarios
+// Formateo de strings de dias y horarios para Class Management
 // -----------------------------------------------------------------------------
 
-export function formatDays(days: string[]): string {
+export function formatDaysForManagement(days: string[]): string {
   if (days.length === 0) return "Sin días definidos";
 
   const ordered = sortDays(days);
@@ -45,13 +42,13 @@ export function formatDays(days: string[]): string {
   return `${ordered.slice(0, -1).join(", ")} y ${ordered[ordered.length - 1]}`;
 }
 
-export function formatSchedule(days: string[], start: string, end: string): string {
+export function formatScheduleForManagement(days: string[], start: string, end: string): string {
   if (days.length === 0 || !start || !end) return "";
-  return `${formatDays(days)} ${start}-${end}`;
+  return `${formatDaysForManagement(days)} ${start} - ${end}`;
 }
 
 // -----------------------------------------------------------------------------
-// Detección de "Hoy" / "Mañana"
+// Detección de "Hoy" / "Mañana" para User Classes
 // -----------------------------------------------------------------------------
 
 export function getDayStatus(day: string): "today" | "tomorrow" | "other" {
@@ -77,18 +74,21 @@ export function getDayStatus(day: string): "today" | "tomorrow" | "other" {
   return "other";
 }
 
-export function formatClassDays(days: string[], forUserView: boolean = false): string {
+export function formatClassDaysForUser(days: string[], start: string, end: string): string {
   const cleaned = days.map((d) => d.trim()).filter(Boolean);
-  if (!forUserView) return formatDays(cleaned);
+  const ordered = sortDays(cleaned);
+  
+  if (ordered.length === 0 || !start || !end) return "Sin horario definido";
 
-  for (const day of cleaned) {
+  // Buscar el próximo día de clase (hoy o mañana)
+  for (const day of ordered) {
     const status = getDayStatus(day);
-    if (status === "today") return "Hoy";
-    if (status === "tomorrow") return "Mañana";
+    if (status === "today") return `Hoy ${start} - ${end}`;
+    if (status === "tomorrow") return `Mañana ${start} - ${end}`;
   }
 
-  // Ningún caso especial
-  return sortDays(cleaned)[0] || "Sin días definidos";
+  // Si no es hoy ni mañana, mostrar el primer día de la semana
+  return `${ordered[0]} ${start} - ${end}`;
 }
 
 // -----------------------------------------------------------------------------
@@ -98,8 +98,8 @@ export function formatClassDays(days: string[], forUserView: boolean = false): s
 export function parseSchedule(schedule: string) {
   if (!schedule) return { days: [], start: "", end: "" };
 
-  // Ejemplo de formato esperado: "Lunes, Jueves y Viernes 19:00-20:30" o "Martes y Jueves 19:00-20:00"
-  const match = schedule.match(/^(.+?)\s+(\d{2}:\d{2})-(\d{2}:\d{2})$/);
+  // Formato esperado: "Lunes, Jueves y Viernes 19:00 - 20:30" o "Martes y Jueves 19:00-20:00"
+  const match = schedule.match(/^(.+?)\s+(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$/);
   if (match) {
     const [, daysStr, start, end] = match;
     // Dividir por coma o por " y " (con espacios a ambos lados) y limpiar espacios
@@ -111,4 +111,31 @@ export function parseSchedule(schedule: string) {
   }
 
   return { days: [], start: "", end: "" };
+}
+
+// Funciones de compatibilidad (deprecated - usar las específicas arriba)
+export function formatDays(days: string[]): string {
+  return formatDaysForManagement(days);
+}
+
+export function formatSchedule(days: string[], start: string, end: string): string {
+  return formatScheduleForManagement(days, start, end);
+}
+
+export function formatClassDays(days: string[], forUserView: boolean = false): string {
+  if (forUserView) {
+    // Para vista de usuario, necesitamos start y end time, pero no los tenemos aquí
+    // Esta función está deprecated, usar formatClassDaysForUser directamente
+    const cleaned = days.map((d) => d.trim()).filter(Boolean);
+    const ordered = sortDays(cleaned);
+    
+    for (const day of ordered) {
+      const status = getDayStatus(day);
+      if (status === "today") return "Hoy";
+      if (status === "tomorrow") return "Mañana";
+    }
+    
+    return ordered[0] || "Sin días definidos";
+  }
+  return formatDaysForManagement(days);
 }

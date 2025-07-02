@@ -65,6 +65,15 @@ export function useProfile() {
         .single();
 
       if (error) {
+        // Si el perfil no existe (cuenta eliminada), cerrar sesión automáticamente
+        if (error.code === 'PGRST116' || error.message?.includes('No rows found') || error.details?.includes('0 rows')) {
+          toast.error("Tu cuenta ha sido eliminada. Serás desconectado automáticamente.");
+          await supabase.auth.signOut();
+          setProfile(null);
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
         throw error;
       }
 
@@ -92,8 +101,13 @@ export function useProfile() {
 
       setProfile(data);
       setIsSuspended(false);
-    } catch {
-      // Removed console.error statements
+    } catch (error) {
+      // Si hay cualquier otro error al obtener el perfil, también cerrar sesión por seguridad
+      console.error("Error fetching profile:", error);
+      toast.error("Error al cargar tu perfil. Serás desconectado por seguridad.");
+      await supabase.auth.signOut();
+      setProfile(null);
+      setUser(null);
     } finally {
       setIsLoading(false);
     }

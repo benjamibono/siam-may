@@ -87,19 +87,15 @@ export function getEnrollmentStatusMessage(userStatus: string, hasMedicalInsuran
 }
 
 /**
- * Determina si una clase está permitida según el último pago del usuario
+ * Determina si una clase está permitida según el concepto de pago del usuario
  */
 export function canEnrollInClassType(
   className: string,
-  lastPaymentConcept: string | null
+  paymentConcept: string | null
 ): boolean {
-  if (!lastPaymentConcept) return false;
+  if (!paymentConcept) return false;
 
-  const isCurrentMonth = true; // Esto se verificará en la implementación real
-
-  if (!isCurrentMonth) return false;
-
-  switch (lastPaymentConcept) {
+  switch (paymentConcept) {
     case "Cuota mensual Muay Thai":
       return className === "Muay Thai";
     case "Cuota mensual MMA":
@@ -120,13 +116,13 @@ export function canEnrollInClassType(
  */
 export function getClassRestrictionMessage(
   className: string,
-  lastPaymentConcept: string | null
+  paymentConcept: string | null
 ): string {
-  if (!lastPaymentConcept) {
+  if (!paymentConcept) {
     return "No tienes pagos registrados para este mes.";
   }
 
-  switch (lastPaymentConcept) {
+  switch (paymentConcept) {
     case "Cuota mensual Muay Thai":
       return className === "MMA"
         ? "Tu cuota actual solo incluye Muay Thai. Para acceder a MMA, necesitas la cuota combinada."
@@ -175,7 +171,7 @@ export function getNewUserStatus(
 
   const dayOfMonth = getCurrentDayOfMonth();
 
-  // Si tiene pago del mes actual y seguro médico válido, activo
+  // Si tiene pago del mes actual y seguro médico válido, Al día
   if (hasCurrentMonthPayment && hasMedicalInsurance) {
     return "active";
   }

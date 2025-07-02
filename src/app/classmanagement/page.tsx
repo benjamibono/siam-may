@@ -15,11 +15,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { 
-  parseSchedule, 
-  formatScheduleForManagement, 
+import {
+  parseSchedule,
+  formatScheduleForManagement,
   formatDaysForManagement,
-  sortDays 
+  sortDays,
 } from "@/lib/utils";
 
 interface ClassWithEnrollments extends Tables<"classes"> {
@@ -29,6 +29,14 @@ interface ClassWithEnrollments extends Tables<"classes"> {
     second_surname: string | null;
   }[];
   enrollment_count: number;
+}
+
+interface AnnouncementWithProfile extends Tables<"announcements"> {
+  profiles?: {
+    name: string;
+    first_surname: string;
+    second_surname: string | null;
+  } | null;
 }
 
 // Función para obtener el icono apropiado según el tipo de clase
@@ -54,10 +62,16 @@ const getClassIcon = (className: string, description?: string) => {
 export default function ClassManagementPage() {
   const { user, isLoading, isAdmin, isStaff } = useProfile();
   const [classes, setClasses] = useState<ClassWithEnrollments[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementWithProfile[]>(
+    []
+  );
   const [isCreating, setIsCreating] = useState(false);
+  const [isCreatingAnnouncement, setIsCreatingAnnouncement] = useState(false);
   const [editingClass, setEditingClass] = useState<ClassWithEnrollments | null>(
     null
   );
+  const [editingAnnouncement, setEditingAnnouncement] =
+    useState<AnnouncementWithProfile | null>(null);
   const [selectedClassForEnrollments, setSelectedClassForEnrollments] =
     useState<ClassWithEnrollments | null>(null);
   const [formData, setFormData] = useState({
@@ -67,12 +81,24 @@ export default function ClassManagementPage() {
     capacity: 20,
   });
 
+  const [announcementFormData, setAnnouncementFormData] = useState({
+    title: "",
+    content: "",
+    expires_at: "",
+    has_expiration: false,
+  });
+
   // Estados para los selectores mejorados
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [classToDelete, setClassToDelete] = useState<string | null>(null);
+  const [deleteAnnouncementConfirmOpen, setDeleteAnnouncementConfirmOpen] =
+    useState(false);
+  const [announcementToDelete, setAnnouncementToDelete] = useState<
+    string | null
+  >(null);
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
 
   const filterOptions = [
@@ -151,6 +177,7 @@ export default function ClassManagementPage() {
   useEffect(() => {
     if (user && (isAdmin || isStaff)) {
       fetchClasses();
+      fetchAnnouncements();
     }
   }, [user, isAdmin, isStaff]);
 
@@ -184,6 +211,99 @@ export default function ClassManagementPage() {
     }
   };
 
+  const fetchAnnouncements = async () => {
+    try {
+      const response = await fetch("/api/announcements");
+
+      if (!response.ok) {
+        throw new Error("Error al obtener los anuncios");
+      }
+
+      const announcementsData = await response.json();
+      setAnnouncements(announcementsData);
+    } catch {
+      toast.error("Error al obtener los anuncios");
+    }
+  };
+
+  const handleSubmitAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!announcementFormData.title || !announcementFormData.content) {
+      toast.error("Título y contenido son requeridos");
+      return;
+    }
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error("No hay sesión activa");
+      }
+
+      const payload = {
+        title: announcementFormData.title,
+        content: announcementFormData.content,
+        expires_at:
+          announcementFormData.has_expiration && announcementFormData.expires_at
+            ? new Date(announcementFormData.expires_at).toISOString()
+            : null,
+      };
+
+      if (editingAnnouncement) {
+        // Update existing announcement
+        const response = await fetch("/api/announcements", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            id: editingAnnouncement.id,
+            ...payload,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Error al actualizar el anuncio");
+        }
+
+        toast.success("Anuncio actualizado correctamente");
+      } else {
+        // Create new announcement
+        const response = await fetch("/api/announcements", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error("Error al crear el anuncio");
+        }
+
+        toast.success("Anuncio creado correctamente");
+      }
+
+      // Reset form
+      setAnnouncementFormData({
+        title: "",
+        content: "",
+        expires_at: "",
+        has_expiration: false,
+      });
+      setIsCreatingAnnouncement(false);
+      setEditingAnnouncement(null);
+      await fetchAnnouncements();
+    } catch {
+      toast.error("Error al procesar el anuncio");
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -204,7 +324,11 @@ export default function ClassManagementPage() {
     }
 
     // Crear el horario formateado con días ordenados
-    const schedule = formatScheduleForManagement(selectedDays, startTime, endTime);
+    const schedule = formatScheduleForManagement(
+      selectedDays,
+      startTime,
+      endTime
+    );
 
     const dataToSave = {
       ...formData,
@@ -314,6 +438,82 @@ export default function ClassManagementPage() {
     setEditingClass(null);
   };
 
+  const handleEditAnnouncement = (announcement: AnnouncementWithProfile) => {
+    setAnnouncementFormData({
+      title: announcement.title,
+      content: announcement.content,
+      expires_at: announcement.expires_at
+        ? new Date(announcement.expires_at).toISOString().slice(0, 16)
+        : "",
+      has_expiration: !!announcement.expires_at,
+    });
+    setEditingAnnouncement(announcement);
+    setIsCreatingAnnouncement(true);
+  };
+
+  const confirmDeleteAnnouncement = (announcementId: string) => {
+    setAnnouncementToDelete(announcementId);
+    setDeleteAnnouncementConfirmOpen(true);
+  };
+
+  const handleDeleteAnnouncement = async () => {
+    if (!announcementToDelete) return;
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error("No hay sesión activa");
+      }
+
+      const response = await fetch(
+        `/api/announcements?id=${announcementToDelete}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Error al eliminar el anuncio");
+      }
+
+      toast.success("Anuncio eliminado correctamente");
+      await fetchAnnouncements();
+
+      // Cerrar el editor del anuncio
+      setIsCreatingAnnouncement(false);
+      setEditingAnnouncement(null);
+      setAnnouncementFormData({
+        title: "",
+        content: "",
+        expires_at: "",
+        has_expiration: false,
+      });
+
+      // Cerrar el dialog de confirmación
+      setDeleteAnnouncementConfirmOpen(false);
+      setAnnouncementToDelete(null);
+    } catch {
+      toast.error("Error al eliminar el anuncio");
+    }
+  };
+
+  const cancelAnnouncementForm = () => {
+    setAnnouncementFormData({
+      title: "",
+      content: "",
+      expires_at: "",
+      has_expiration: false,
+    });
+    setIsCreatingAnnouncement(false);
+    setEditingAnnouncement(null);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -343,16 +543,384 @@ export default function ClassManagementPage() {
       <div className="max-w-6xl mx-auto px-4">
         {/* Header */}
         <div className="mb-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <Button variant="outline" className="w-full sm:w-auto">
-              <Plus className="h-4 w-4" />
-              Nuevo Anuncio
-            </Button>
-            <Button onClick={() => setIsCreating(true)} className="w-full sm:w-auto">
-              <Plus className="h-4 w-4" />
-              Nueva Clase
-            </Button>
-              {/* Filtros */}
+          <div className="flex flex-col gap-4 justify-between">
+            <div className="flex flex-row gap-2 justify-evenly">
+              <Button
+                className="w-1/2"
+                onClick={() => setIsCreatingAnnouncement(true)}
+              >
+                <Plus className="h-4 w-4" />
+                Nuevo Anuncio
+              </Button>
+              <Button onClick={() => setIsCreating(true)} className="w-1/2">
+                <Plus className="h-4 w-4" />
+                Nueva Clase
+              </Button>
+            </div>
+            {isCreatingAnnouncement && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    {editingAnnouncement ? "Editar Anuncio" : "Crear Anuncio"}
+                    {editingAnnouncement && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          confirmDeleteAnnouncement(editingAnnouncement.id)
+                        }
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash className="h-4 w-4 mr-1" />
+                        Eliminar
+                      </Button>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form
+                    onSubmit={handleSubmitAnnouncement}
+                    className="flex flex-col gap-4"
+                  >
+                    <div>
+                      <label
+                        htmlFor="title"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Título
+                      </label>
+                      <input
+                        type="text"
+                        id="title"
+                        value={announcementFormData.title}
+                        onChange={(e) =>
+                          setAnnouncementFormData({
+                            ...announcementFormData,
+                            title: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="content"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Contenido
+                      </label>
+                      <textarea
+                        id="content"
+                        value={announcementFormData.content}
+                        onChange={(e) =>
+                          setAnnouncementFormData({
+                            ...announcementFormData,
+                            content: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        rows={4}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <input
+                          type="checkbox"
+                          id="has_expiration"
+                          checked={announcementFormData.has_expiration}
+                          onChange={(e) =>
+                            setAnnouncementFormData({
+                              ...announcementFormData,
+                              has_expiration: e.target.checked,
+                              expires_at: e.target.checked
+                                ? announcementFormData.expires_at
+                                : "",
+                            })
+                          }
+                          className="rounded"
+                        />
+                        <label
+                          htmlFor="has_expiration"
+                          className="text-sm font-medium text-gray-700"
+                        >
+                          Establecer fecha de caducidad
+                        </label>
+                      </div>
+                      {announcementFormData.has_expiration && (
+                        <input
+                          type="datetime-local"
+                          id="expires_at"
+                          value={announcementFormData.expires_at}
+                          onChange={(e) =>
+                            setAnnouncementFormData({
+                              ...announcementFormData,
+                              expires_at: e.target.value,
+                            })
+                          }
+                          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          min={new Date().toISOString().slice(0, 16)}
+                        />
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="submit">
+                        {editingAnnouncement
+                          ? "Actualizar Anuncio"
+                          : "Crear Anuncio"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={cancelAnnouncementForm}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
+            {isCreating && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    {editingClass ? "Editar Clase" : "Crear Nueva Clase"}
+                    {editingClass && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => confirmDelete(editingClass.id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash className="h-4 w-4 mr-1" />
+                        Eliminar
+                      </Button>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                    <div>
+                      <label
+                        htmlFor="name"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Tipo de Clase
+                      </label>
+                      <select
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            name: e.target.value as "Muay Thai" | "MMA",
+                          })
+                        }
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      >
+                        <option value="Muay Thai">Muay Thai</option>
+                        <option value="MMA">MMA</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="description"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Descripción
+                      </label>
+                      <textarea
+                        id="description"
+                        value={formData.description}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            description: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        rows={3}
+                        placeholder="Descripción de la clase..."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Días de la semana
+                      </label>
+                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-7">
+                        {daysOfWeek.map((day) => (
+                          <button
+                            key={day.value}
+                            type="button"
+                            onClick={() => handleDayToggle(day.value)}
+                            className={`px-3 py-2 text-sm border rounded-md transition-colors ${
+                              selectedDays.includes(day.value)
+                                ? "bg-blue-500 text-white border-blue-500"
+                                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                            }`}
+                          >
+                            {day.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label
+                          htmlFor="startTime"
+                          className="block text-sm font-medium text-gray-700"
+                        >
+                          Hora de inicio
+                        </label>
+                        <input
+                          type="time"
+                          id="startTime"
+                          value={startTime}
+                          onChange={(e) => setStartTime(e.target.value)}
+                          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="endTime"
+                          className="block text-sm font-medium text-gray-700"
+                        >
+                          Hora de fin
+                        </label>
+                        <input
+                          type="time"
+                          id="endTime"
+                          value={endTime}
+                          onChange={(e) => setEndTime(e.target.value)}
+                          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {selectedDays.length > 0 && startTime && endTime && (
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                        <p className="text-sm text-blue-800">
+                          <strong>Horario:</strong>{" "}
+                          {formatScheduleForManagement(
+                            sortDays(selectedDays),
+                            startTime,
+                            endTime
+                          )}
+                        </p>
+                      </div>
+                    )}
+
+                    <div>
+                      <label
+                        htmlFor="capacity"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Capacidad máxima
+                      </label>
+                      <input
+                        type="number"
+                        id="capacity"
+                        value={formData.capacity}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            capacity: parseInt(e.target.value),
+                          })
+                        }
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                        min="1"
+                        max="50"
+                      />
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button type="submit">
+                        {editingClass ? "Actualizar Clase" : "Crear Clase"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={cancelForm}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Lista de anuncios existentes */}
+            {announcements.length > 0 && (
+              <div className="mb-2">
+                <div className="grid gap-4">
+                  {announcements.map((announcement) => (
+                    <Card
+                      key={announcement.id}
+                      className="cursor-pointer hover:shadow-md transition-shadow"
+                      onClick={() => handleEditAnnouncement(announcement)}
+                    >
+                      <CardHeader className="">
+                        <CardTitle className="flex flex-col items-center justify-between">
+                          <span className="text-lg text-balance">
+                            {announcement.title}
+                          </span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-gray-700 text-center text-pretty pb-4">
+                          {announcement.content}
+                        </p>
+                        <div className="flex flex-row gap-2 justify-between text-xs text-gray-500">
+                          Creado:{" "}
+                          {new Date(announcement.created_at).toLocaleDateString(
+                            "es-ES",
+                            {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )}
+                          <span className="text-xs text-gray-500">
+                            Por: {announcement.profiles?.name || "Usuario"}{" "}
+                            {announcement.profiles?.first_surname || ""}
+                          </span>
+                        </div>
+                        <div className="flex gap-2 justify-between text-xs text-orange-400">
+                          {announcement.expires_at && (
+                            <span>
+                              Expira:{" "}
+                              {new Date(
+                                announcement.expires_at
+                              ).toLocaleDateString("es-ES", {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Filtros */}
             <div className="flex gap-1 items-center flex-wrap justify-evenly">
               {filterOptions.map((option) => (
                 <button
@@ -371,179 +939,15 @@ export default function ClassManagementPage() {
           </div>
         </div>
 
-        {isCreating && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                {editingClass ? "Editar Clase" : "Crear Nueva Clase"}
-                {editingClass && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => confirmDelete(editingClass.id)}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash className="h-4 w-4 mr-1" />
-                    Eliminar
-                  </Button>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <div>
-                  <label
-                    htmlFor="name"
-                    className="block text-sm font-medium text-gray-700"
-                  >
-                    Tipo de Clase
-                  </label>
-                  <select
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        name: e.target.value as "Muay Thai" | "MMA",
-                      })
-                    }
-                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  >
-                    <option value="Muay Thai">Muay Thai</option>
-                    <option value="MMA">MMA</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="description"
-                    className="block text-sm font-medium text-gray-700"
-                  >
-                    Descripción
-                  </label>
-                  <textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) =>
-                      setFormData({ ...formData, description: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    rows={3}
-                    placeholder="Descripción de la clase..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Días de la semana
-                  </label>
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-7">
-                    {daysOfWeek.map((day) => (
-                      <button
-                        key={day.value}
-                        type="button"
-                        onClick={() => handleDayToggle(day.value)}
-                        className={`px-3 py-2 text-sm border rounded-md transition-colors ${
-                          selectedDays.includes(day.value)
-                            ? "bg-blue-500 text-white border-blue-500"
-                            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                        }`}
-                      >
-                        {day.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label
-                      htmlFor="startTime"
-                      className="block text-sm font-medium text-gray-700"
-                    >
-                      Hora de inicio
-                    </label>
-                    <input
-                      type="time"
-                      id="startTime"
-                      value={startTime}
-                      onChange={(e) => setStartTime(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor="endTime"
-                      className="block text-sm font-medium text-gray-700"
-                    >
-                      Hora de fin
-                    </label>
-                    <input
-                      type="time"
-                      id="endTime"
-                      value={endTime}
-                      onChange={(e) => setEndTime(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {selectedDays.length > 0 && startTime && endTime && (
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-                    <p className="text-sm text-blue-800">
-                      <strong>Horario:</strong>{" "}
-                      {formatScheduleForManagement(sortDays(selectedDays), startTime, endTime)}
-                    </p>
-                  </div>
-                )}
-
-                <div>
-                  <label
-                    htmlFor="capacity"
-                    className="block text-sm font-medium text-gray-700"
-                  >
-                    Capacidad máxima
-                  </label>
-                  <input
-                    type="number"
-                    id="capacity"
-                    value={formData.capacity}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        capacity: parseInt(e.target.value),
-                      })
-                    }
-                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                    min="1"
-                    max="50"
-                  />
-                </div>
-
-                <div className="flex gap-2">
-                  <Button type="submit">
-                    {editingClass ? "Actualizar Clase" : "Crear Clase"}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={cancelForm}>
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Lista de clases */}
         <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
           {filterClasses(classes).map((classItem) => {
             const parsed = parseSchedule(classItem.schedule);
-            const icon = getClassIcon(classItem.name, classItem.description || undefined);
-            
+            const icon = getClassIcon(
+              classItem.name,
+              classItem.description || undefined
+            );
+
             return (
               <Card
                 key={classItem.id}
@@ -631,7 +1035,7 @@ export default function ClassManagementPage() {
           </Card>
         )}
 
-        {/* Diálogo de confirmación de eliminación */}
+        {/* Diálogo de confirmación de eliminación de clase */}
         <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
@@ -651,6 +1055,35 @@ export default function ClassManagementPage() {
                 Cancelar
               </Button>
               <Button variant="destructive" onClick={handleDelete}>
+                Eliminar
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Diálogo de confirmación de eliminación de anuncio */}
+        <Dialog
+          open={deleteAnnouncementConfirmOpen}
+          onOpenChange={setDeleteAnnouncementConfirmOpen}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Confirmar eliminación</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-gray-600">
+                ¿Estás seguro de que quieres eliminar este anuncio? Esta acción
+                no se puede deshacer.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setDeleteAnnouncementConfirmOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteAnnouncement}>
                 Eliminar
               </Button>
             </div>

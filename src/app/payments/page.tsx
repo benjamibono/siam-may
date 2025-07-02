@@ -6,8 +6,9 @@ import { useProfile } from "@/hooks/useProfile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
 import type { Tables } from "@/lib/supabase";
+
 import {
   Command,
   CommandEmpty,
@@ -27,79 +28,7 @@ interface UserOption {
   email: string;
 }
 
-// Componente Dialog para opciones de pago (editar/eliminar)
-const PaymentOptionsDialog = ({
-  isOpen,
-  onClose,
-  payment,
-  onEdit,
-  onDelete,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  payment: Tables<"payments"> | null;
-  onEdit: (payment: Tables<"payments">) => void;
-  onDelete: (payment: Tables<"payments">) => void;
-}) => {
-  if (!isOpen || !payment) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
-        <h3 className="text-lg font-semibold mb-4">Opciones de Pago</h3>
-
-        {/* Información del pago */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg space-y-2">
-          <p>
-            <span className="font-medium">Usuario:</span> {payment.full_name}
-          </p>
-          <p>
-            <span className="font-medium">Concepto:</span> {payment.concept}
-          </p>
-          <p>
-            <span className="font-medium">Importe:</span> {payment.amount}€
-          </p>
-          <p>
-            <span className="font-medium">Método:</span>{" "}
-            {payment.payment_method}
-          </p>
-          <p>
-            <span className="font-medium">Fecha:</span>{" "}
-            {new Date(payment.payment_date).toLocaleDateString()}
-          </p>
-        </div>
-
-        {/* Botones de acción */}
-        <div className="flex flex-col gap-2">
-          <Button
-            onClick={() => {
-              onEdit(payment);
-              onClose();
-            }}
-            className="w-full"
-          >
-            Editar Pago
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => {
-              if (confirm("¿Estás seguro de que quieres eliminar este pago?")) {
-                onDelete(payment);
-                onClose();
-              }
-            }}
-            className="w-full"
-          >
-            Eliminar Pago
-          </Button>
-          <Button variant="outline" onClick={onClose} className="w-full">
-            Cancelar
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export default function PaymentsPage() {
   const { user, isLoading, isAdmin, isStaff } = useProfile();
@@ -126,9 +55,6 @@ export default function PaymentsPage() {
   const [users, setUsers] = useState<UserOption[]>([]);
   const [openUserSearch, setOpenUserSearch] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState("");
-  const [showPaymentOptions, setShowPaymentOptions] = useState(false);
-  const [selectedPayment, setSelectedPayment] =
-    useState<Tables<"payments"> | null>(null);
 
   useEffect(() => {
     if (user && (isAdmin || isStaff)) {
@@ -227,7 +153,7 @@ export default function PaymentsPage() {
               toast.success(
                 `Estado del usuario actualizado a: ${
                   result.newStatus === "active"
-                    ? "Activo"
+                    ? "Al día"
                     : result.newStatus === "pending"
                     ? "Pendiente"
                     : "Suspendido"
@@ -259,18 +185,7 @@ export default function PaymentsPage() {
     }
   };
 
-  const handleEditPayment = (payment: Tables<"payments">) => {
-    setEditingPayment(payment);
-    setFormData({
-      user_id: payment.user_id,
-      full_name: payment.full_name,
-      concept: payment.concept as typeof formData.concept,
-      amount: payment.amount,
-      payment_method: payment.payment_method as typeof formData.payment_method,
-      payment_date: payment.payment_date,
-    });
-    setIsCreating(true);
-  };
+
 
   const handleDeletePayment = async (payment: Tables<"payments">) => {
     try {
@@ -302,7 +217,7 @@ export default function PaymentsPage() {
               toast.success(
                 `Estado del usuario actualizado a: ${
                   result.newStatus === "active"
-                    ? "Activo"
+                    ? "Al día"
                     : result.newStatus === "pending"
                     ? "Pendiente"
                     : "Suspendido"
@@ -575,12 +490,24 @@ export default function PaymentsPage() {
                   />
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 justify-evenly">
                   <Button type="submit">
                     {editingPayment ? "Actualizar Pago" : "Registrar Pago"}
                   </Button>
                   <Button type="button" variant="outline" onClick={cancelForm}>
                     Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => {
+                      if (editingPayment) {
+                        handleDeletePayment(editingPayment);
+                        setIsCreating(false);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </form>
@@ -595,8 +522,18 @@ export default function PaymentsPage() {
               key={payment.id}
               className="py-2 cursor-pointer hover:shadow-md transition-shadow"
               onClick={() => {
-                setSelectedPayment(payment);
-                setShowPaymentOptions(true);
+                setFormData({
+                  ...formData,
+                  user_id: payment.user_id,
+                  full_name: payment.full_name,
+                  concept: payment.concept as typeof formData.concept,
+                  amount: payment.amount,
+                  payment_method:
+                    payment.payment_method as typeof formData.payment_method,
+                  payment_date: payment.payment_date,
+                });
+                setIsCreating(true);
+                setEditingPayment(payment);
               }}
             >
               <CardContent className="py-3">
@@ -639,14 +576,7 @@ export default function PaymentsPage() {
         )}
       </div>
 
-      {/* Dialog de opciones de pago */}
-      <PaymentOptionsDialog
-        isOpen={showPaymentOptions}
-        onClose={() => setShowPaymentOptions(false)}
-        payment={selectedPayment}
-        onEdit={handleEditPayment}
-        onDelete={handleDeletePayment}
-      />
+
     </div>
   );
 }

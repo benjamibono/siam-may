@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 
 export async function GET() {
   try {
-    // Verificar que el usuario esté autenticado y sea admin
+    // Verificar que el usuario esté autenticado y sea admin o staff
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -13,18 +13,18 @@ export async function GET() {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    // Verificar si el usuario es admin consultando su perfil
+    // Verificar si el usuario es admin o staff consultando su perfil
     const { data: userProfile } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", session.user.id)
       .single();
 
-    if (userProfile?.role !== "admin") {
+    if (userProfile?.role !== "admin" && userProfile?.role !== "staff") {
       return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
     }
 
-    // Si es admin, usar el cliente administrativo para obtener todos los perfiles
+    // Si es admin o staff, usar el cliente administrativo para obtener todos los perfiles
     const { data: profiles, error } = await supabaseAdmin
       .from("profiles")
       .select("*")
@@ -48,7 +48,7 @@ export async function PUT(request: NextRequest) {
   try {
     const { userId, role } = await request.json();
 
-    // Verificar autenticación y permisos de admin
+    // Verificar autenticación y permisos de admin o staff
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -63,7 +63,7 @@ export async function PUT(request: NextRequest) {
       .eq("id", session.user.id)
       .single();
 
-    if (userProfile?.role !== "admin") {
+    if (userProfile?.role !== "admin" && userProfile?.role !== "staff") {
       return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
     }
 

@@ -133,9 +133,9 @@ export function rateLimit(
 }
 
 /**
- * Función para verificar si un usuario es administrador
+ * Función para verificar si un usuario es administrador o staff
  */
-async function checkIfUserIsAdmin(request: NextRequest): Promise<boolean> {
+async function checkIfUserIsAdminOrStaff(request: NextRequest): Promise<boolean> {
   try {
     const authHeader = request.headers.get("authorization");
     if (!authHeader) return false;
@@ -167,7 +167,7 @@ async function checkIfUserIsAdmin(request: NextRequest): Promise<boolean> {
       .eq("id", user.id)
       .single();
 
-    return profile?.role === "admin";
+    return profile?.role === "admin" || profile?.role === "staff";
   } catch {
     return false;
   }
@@ -187,10 +187,10 @@ export function withRateLimit(
       request: NextRequest
     ): Promise<NextResponse> {
       try {
-        // Verificar si el usuario es administrador
-        const isAdmin = await checkIfUserIsAdmin(request);
-        if (isAdmin) {
-          // Los administradores no tienen rate limiting
+        // Verificar si el usuario es administrador o staff
+        const isAdminOrStaff = await checkIfUserIsAdminOrStaff(request);
+        if (isAdminOrStaff) {
+          // Los administradores y staff no tienen rate limiting
           return await handler(request);
         }
 

@@ -56,22 +56,11 @@ export default function Navigation() {
     />
   );
 
-  // Función para renderizar el icono de staff
-  const ShieldIcon = ({ className = "h-6 w-6" }: { className?: string }) => (
-    <Image
-      src="/shield.png"
-      alt="Staff"
-      width={24}
-      height={24}
-      className={className}
-    />
-  );
-
   // Determinar qué links mostrar según el rol
   const getNavigationItems = () => {
     const baseItems = [];
 
-    if (isAdmin) {
+    if (isAdmin || isStaff) {
       baseItems.push(
         { href: "/users", icon: Users, label: "Usuarios", key: "users" },
         {
@@ -79,28 +68,6 @@ export default function Navigation() {
           icon: GymIcon,
           label: "Gestión Clases",
           key: "classes",
-        },
-        {
-          href: "/payments",
-          icon: CreditCard,
-          label: "Pagos",
-          key: "payments",
-        },
-        { href: "/user", icon: User, label: "Mi Perfil", key: "profile" }
-      );
-    } else if (isStaff) {
-      baseItems.push(
-        {
-          href: "/userclasses",
-          icon: ShieldIcon,
-          label: "Clases",
-          key: "classes",
-        },
-        {
-          href: "/classmanagement",
-          icon: GymIcon,
-          label: "Gestión Clases",
-          key: "classes-mgmt",
         },
         {
           href: "/payments",

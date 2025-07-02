@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { CreditCard, Plus } from "lucide-react";
+import { CreditCard, Plus, Trash2 } from "lucide-react";
 import type { Tables } from "@/lib/supabase";
 import { isValidMedicalInsurance, getCurrentMonthYear } from "@/lib/payment-logic";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 // Componente Dialog simple para reset de contraseña
 const PasswordResetDialog = ({
@@ -38,6 +39,7 @@ const PasswordResetDialog = ({
     setPassword("");
     setConfirmPassword("");
   };
+  
 
   if (!isOpen) return null;
 
@@ -77,6 +79,88 @@ const PasswordResetDialog = ({
               Cancelar
             </Button>
             <Button type="submit">Cambiar Contraseña</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Componente Dialog para cambiar email
+const ChangeEmailDialog = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  currentEmail,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: (email: string) => void;
+  currentEmail: string;
+}) => {
+  const [email, setEmail] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validar formato de email
+    const emailRegex = /^\S+@\S+\.\S+$/;
+    if (!emailRegex.test(email)) {
+      toast.error("Por favor ingresa un email válido");
+      return;
+    }
+
+    if (email === currentEmail) {
+      toast.error("El nuevo email debe ser diferente al actual");
+      return;
+    }
+
+    onConfirm(email);
+    setEmail("");
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      setEmail("");
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+        <h3 className="text-lg font-semibold mb-4">Cambiar Email</h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email Actual
+            </label>
+            <input
+              type="email"
+              value={currentEmail}
+              readOnly
+              className="w-full px-3 py-2 border rounded-md bg-gray-50"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nuevo Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+              placeholder="nuevo@email.com"
+            />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit">Cambiar Email</Button>
           </div>
         </form>
       </div>
@@ -171,7 +255,7 @@ const CreatePaymentDialog = ({
               toast.success(
                 `Estado del usuario actualizado a: ${
                   result.newStatus === "active"
-                    ? "Activo"
+                    ? "Al día"
                     : result.newStatus === "pending"
                     ? "Pendiente"
                     : "Suspendido"
@@ -320,305 +404,9 @@ const CreatePaymentDialog = ({
   );
 };
 
-// Componente Dialog para opciones de pago (editar/eliminar)
-const PaymentOptionsDialog = ({
-  isOpen,
-  onClose,
-  payment,
-  onEdit,
-  onDelete,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  payment: Tables<"payments"> | null;
-  onEdit: (payment: Tables<"payments">) => void;
-  onDelete: (payment: Tables<"payments">) => void;
-}) => {
-  if (!isOpen || !payment) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
-        <h3 className="text-lg font-semibold mb-4">Opciones de Pago</h3>
 
-        {/* Información del pago */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg space-y-2">
-          <p>
-            <span className="font-medium">Usuario:</span> {payment.full_name}
-          </p>
-          <p>
-            <span className="font-medium">Concepto:</span> {payment.concept}
-          </p>
-          <p>
-            <span className="font-medium">Importe:</span> {payment.amount}€
-          </p>
-          <p>
-            <span className="font-medium">Método:</span>{" "}
-            {payment.payment_method}
-          </p>
-          <p>
-            <span className="font-medium">Fecha:</span>{" "}
-            {new Date(payment.payment_date).toLocaleDateString()}
-          </p>
-        </div>
 
-        {/* Botones de acción */}
-        <div className="flex flex-col gap-2">
-          <Button
-            onClick={() => {
-              onEdit(payment);
-              onClose();
-            }}
-            className="w-full"
-          >
-            Editar Pago
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => {
-              if (confirm("¿Estás seguro de que quieres eliminar este pago?")) {
-                onDelete(payment);
-                onClose();
-              }
-            }}
-            className="w-full"
-          >
-            Eliminar Pago
-          </Button>
-          <Button variant="outline" onClick={onClose} className="w-full">
-            Cancelar
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Componente Dialog para editar pago
-const EditPaymentDialog = ({
-  isOpen,
-  onClose,
-  payment,
-  onSave,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  payment: Tables<"payments"> | null;
-  onSave: () => void;
-}) => {
-  const [formData, setFormData] = useState({
-    concept: "Cuota mensual Muay Thai" as
-      | "Cuota mensual Muay Thai"
-      | "Cuota mensual MMA"
-      | "Cuota mensual Muay Thai + MMA"
-      | "Matrícula"
-      | "Seguro Médico",
-    amount: 30,
-    payment_method: "Efectivo" as "Efectivo" | "Bizum" | "Transferencia",
-    payment_date: new Date().toISOString().split("T")[0],
-  });
-
-  useEffect(() => {
-    if (isOpen && payment) {
-      setFormData({
-        concept: payment.concept as typeof formData.concept,
-        amount: payment.amount,
-        payment_method:
-          payment.payment_method as typeof formData.payment_method,
-        payment_date: payment.payment_date,
-      });
-    }
-  }, [isOpen, payment, formData]);
-
-  const getConceptAmount = (concept: string) => {
-    switch (concept) {
-      case "Cuota mensual Muay Thai":
-        return 30;
-      case "Cuota mensual MMA":
-        return 45;
-      case "Cuota mensual Muay Thai + MMA":
-        return 60;
-      case "Matrícula":
-        return 30;
-      case "Seguro Médico":
-        return 30;
-      default:
-        return 30;
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!payment) return;
-
-    try {
-      const { error } = await supabase
-        .from("payments")
-        .update({
-          ...formData,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", payment.id);
-
-      if (error) throw error;
-      toast.success("Pago actualizado correctamente");
-
-      // Procesar automáticamente el estado del usuario después de actualizar un pago
-      try {
-        const { data: session } = await supabase.auth.getSession();
-        if (session.session) {
-          const response = await fetch(
-            `/api/payments/process-status?userId=${payment.user_id}`,
-            {
-              headers: {
-                Authorization: `Bearer ${session.session.access_token}`,
-              },
-            }
-          );
-
-          if (response.ok) {
-            const result = await response.json();
-            if (result.statusChanged) {
-              toast.success(
-                `Estado del usuario actualizado a: ${
-                  result.newStatus === "active"
-                    ? "Activo"
-                    : result.newStatus === "pending"
-                    ? "Pendiente"
-                    : "Suspendido"
-                }`
-              );
-            }
-          }
-        }
-      } catch (statusError) {
-        console.error("Error updating user status:", statusError);
-      }
-
-      onSave();
-      onClose();
-    } catch (error: unknown) {
-      console.error("Error updating payment:", error);
-      toast.error("Error al actualizar el pago");
-    }
-  };
-
-  if (!isOpen || !payment) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <h3 className="text-lg font-semibold mb-4">Editar Pago</h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Usuario
-            </label>
-            <input
-              type="text"
-              value={payment.full_name}
-              readOnly
-              className="w-full px-3 py-2 border rounded-md bg-gray-50"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Concepto
-            </label>
-            <select
-              value={formData.concept}
-              onChange={(e) => {
-                const concept = e.target.value as typeof formData.concept;
-                setFormData({
-                  ...formData,
-                  concept,
-                  amount: getConceptAmount(concept),
-                });
-              }}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            >
-              <option value="Cuota mensual Muay Thai">
-                Cuota mensual Muay Thai
-              </option>
-              <option value="Cuota mensual MMA">Cuota mensual MMA</option>
-              <option value="Cuota mensual Muay Thai + MMA">
-                Cuota mensual Muay Thai + MMA
-              </option>
-              <option value="Matrícula">Matrícula</option>
-              <option value="Seguro Médico">Seguro Médico</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Importe (€)
-            </label>
-            <input
-              type="number"
-              value={formData.amount}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  amount: parseFloat(e.target.value) || 0,
-                })
-              }
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-              min="0"
-              step="0.01"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Método de Pago
-            </label>
-            <select
-              value={formData.payment_method}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  payment_method: e.target
-                    .value as typeof formData.payment_method,
-                })
-              }
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            >
-              <option value="Efectivo">Efectivo</option>
-              <option value="Bizum">Bizum</option>
-              <option value="Transferencia">Transferencia</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Fecha de Pago
-            </label>
-            <input
-              type="date"
-              value={formData.payment_date}
-              onChange={(e) =>
-                setFormData({ ...formData, payment_date: e.target.value })
-              }
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-
-          <div className="flex gap-2 justify-end">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit">Actualizar Pago</Button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
 
 // Componente Dialog para confirmar eliminación de usuario
 const DeleteUserDialog = ({
@@ -668,11 +456,21 @@ export default function UserDetailPage({
   const [userPayments, setUserPayments] = useState<Tables<"payments">[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
   const [showCreatePaymentDialog, setShowCreatePaymentDialog] = useState(false);
-  const [showPaymentOptions, setShowPaymentOptions] = useState(false);
-  const [showEditPaymentDialog, setShowEditPaymentDialog] = useState(false);
-  const [selectedPayment, setSelectedPayment] =
-    useState<Tables<"payments"> | null>(null);
+  const [isEditingPayment, setIsEditingPayment] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<Tables<"payments"> | null>(null);
+  const [paymentFormData, setPaymentFormData] = useState({
+    concept: "Cuota mensual Muay Thai" as
+      | "Cuota mensual Muay Thai"
+      | "Cuota mensual MMA"
+      | "Cuota mensual Muay Thai + MMA"
+      | "Matrícula"
+      | "Seguro Médico",
+    amount: 30,
+    payment_method: "Efectivo" as "Efectivo" | "Bizum" | "Transferencia",
+    payment_date: new Date().toISOString().split("T")[0],
+  });
   const [formData, setFormData] = useState({
     name: "",
     first_surname: "",
@@ -682,6 +480,8 @@ export default function UserDetailPage({
     role: "user" as "admin" | "staff" | "user",
   });
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showSuspendConfirm, setShowSuspendConfirm] = useState(false);
+  const [suspendAction, setSuspendAction] = useState<"suspend" | "activate">("suspend");
   const [id, setId] = useState<string>("");
 
   useEffect(() => {
@@ -811,16 +611,12 @@ export default function UserDetailPage({
   };
 
   // Cambio de email usando supabase.auth.updateUser
-  const handleEmailChange = async () => {
-    const newEmail = prompt("Ingresa el nuevo email para el usuario:");
-    if (!newEmail || !targetUser) return;
+  const handleEmailChange = () => {
+    setShowEmailDialog(true);
+  };
 
-    // Validar formato de email
-    const emailRegex = /^\S+@\S+\.\S+$/;
-    if (!emailRegex.test(newEmail)) {
-      toast.error("Por favor ingresa un email válido");
-      return;
-    }
+  const handleEmailConfirm = async (newEmail: string) => {
+    if (!targetUser) return;
 
     try {
       // Si es el propio usuario, usar updateUser directamente
@@ -865,6 +661,7 @@ export default function UserDetailPage({
         toast.success("Email actualizado correctamente");
       }
 
+      setShowEmailDialog(false);
       fetchUserData(); // Refresh user data
     } catch (error: unknown) {
       console.error("Error changing email:", error);
@@ -896,11 +693,18 @@ export default function UserDetailPage({
 
     const newStatus =
       targetUser.status === "suspended" ? "active" : "suspended";
-    const action = newStatus === "suspended" ? "suspender" : "activar";
+    const action = newStatus === "suspended" ? "suspend" : "activate";
+    
+    setSuspendAction(action);
+    setShowSuspendConfirm(true);
+  };
 
-    if (!confirm(`¿Estás seguro de que quieres ${action} esta cuenta?`)) {
-      return;
-    }
+  const confirmSuspendToggle = async () => {
+    if (!targetUser) return;
+
+    const newStatus =
+      targetUser.status === "suspended" ? "active" : "suspended";
+    const actionText = newStatus === "suspended" ? "suspender" : "activar";
 
     try {
       const session = await supabase.auth.getSession();
@@ -921,7 +725,7 @@ export default function UserDetailPage({
       });
 
       if (!response.ok) {
-        throw new Error(`Error al ${action} cuenta`);
+        throw new Error(`Error al ${actionText} cuenta`);
       }
 
       toast.success(
@@ -930,9 +734,10 @@ export default function UserDetailPage({
         } correctamente`
       );
       fetchUserData(); // Refresh user data
+      setShowSuspendConfirm(false);
     } catch (error: unknown) {
       console.error("Error toggling suspend:", error);
-      toast.error(`Error al ${action} la cuenta`);
+      toast.error(`Error al ${actionText} la cuenta`);
     }
   };
 
@@ -975,7 +780,38 @@ export default function UserDetailPage({
           newRole === "staff" ? "otorgados" : "removidos"
         } correctamente`
       );
-      fetchUserData(); // Refresh user data
+
+      // Procesar automáticamente el estado del usuario después de cambiar el rol
+      try {
+        const statusResponse = await fetch(
+          `/api/payments/process-status?userId=${targetUser.id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (statusResponse.ok) {
+          const result = await statusResponse.json();
+          if (result.statusChanged) {
+            toast.success(
+              `Estado del usuario actualizado a: ${
+                result.newStatus === "active"
+                  ? "Al día"
+                  : result.newStatus === "pending"
+                  ? "Pendiente"
+                  : "Suspendido"
+              }`
+            );
+          }
+        }
+      } catch (statusError) {
+        console.error("Error updating user status:", statusError);
+        // No mostrar error al usuario ya que el cambio de rol se realizó correctamente
+      }
+
+      fetchUserData(); // Refresh user data from database
     } catch (error: unknown) {
       console.error("Error updating user role:", error);
       toast.error("Error al actualizar los permisos del usuario");
@@ -983,8 +819,14 @@ export default function UserDetailPage({
   };
 
   const handleEditPayment = (payment: Tables<"payments">) => {
-    setSelectedPayment(payment);
-    setShowEditPaymentDialog(true);
+    setEditingPayment(payment);
+    setPaymentFormData({
+      concept: payment.concept as typeof paymentFormData.concept,
+      amount: payment.amount,
+      payment_method: payment.payment_method as typeof paymentFormData.payment_method,
+      payment_date: payment.payment_date,
+    });
+    setIsEditingPayment(true);
   };
 
   const handleDeletePayment = async (payment: Tables<"payments">) => {
@@ -1017,7 +859,7 @@ export default function UserDetailPage({
               toast.success(
                 `Estado del usuario actualizado a: ${
                   result.newStatus === "active"
-                    ? "Activo"
+                    ? "Al día"
                     : result.newStatus === "pending"
                     ? "Pendiente"
                     : "Suspendido"
@@ -1031,9 +873,96 @@ export default function UserDetailPage({
       }
 
       fetchUserData(); // Refresh user data
+      setIsEditingPayment(false);
+      setEditingPayment(null);
     } catch (error) {
       console.error("Error deleting payment:", error);
       toast.error("Error al eliminar el pago");
+    }
+  };
+
+  const handlePaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPayment) return;
+
+    try {
+      const { error } = await supabase
+        .from("payments")
+        .update({
+          ...paymentFormData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", editingPayment.id);
+
+      if (error) throw error;
+      toast.success("Pago actualizado correctamente");
+
+      // Procesar automáticamente el estado del usuario después de actualizar un pago
+      try {
+        const { data: session } = await supabase.auth.getSession();
+        if (session.session) {
+          const response = await fetch(
+            `/api/payments/process-status?userId=${editingPayment.user_id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${session.session.access_token}`,
+              },
+            }
+          );
+
+          if (response.ok) {
+            const result = await response.json();
+            if (result.statusChanged) {
+              toast.success(
+                `Estado del usuario actualizado a: ${
+                  result.newStatus === "active"
+                    ? "Al día"
+                    : result.newStatus === "pending"
+                    ? "Pendiente"
+                    : "Suspendido"
+                }`
+              );
+            }
+          }
+        }
+      } catch (statusError) {
+        console.error("Error updating user status:", statusError);
+      }
+
+      setIsEditingPayment(false);
+      setEditingPayment(null);
+      fetchUserData();
+    } catch (error: unknown) {
+      console.error("Error updating payment:", error);
+      toast.error("Error al actualizar el pago");
+    }
+  };
+
+  const cancelPaymentForm = () => {
+    setPaymentFormData({
+      concept: "Cuota mensual Muay Thai",
+      amount: 30,
+      payment_method: "Efectivo",
+      payment_date: new Date().toISOString().split("T")[0],
+    });
+    setIsEditingPayment(false);
+    setEditingPayment(null);
+  };
+
+  const getConceptAmount = (concept: string) => {
+    switch (concept) {
+      case "Cuota mensual Muay Thai":
+        return 30;
+      case "Cuota mensual MMA":
+        return 45;
+      case "Cuota mensual Muay Thai + MMA":
+        return 60;
+      case "Matrícula":
+        return 30;
+      case "Seguro Médico":
+        return 30;
+      default:
+        return 30;
     }
   };
 
@@ -1079,6 +1008,9 @@ export default function UserDetailPage({
     }
   };
 
+  // Verificar si el usuario actual es staff y está intentando acceder a una cuenta admin
+  const isStaffAccessingAdmin = isStaff && !isAdmin && targetUser?.role === "admin";
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -1095,11 +1027,36 @@ export default function UserDetailPage({
     );
   }
 
+  // Bloquear acceso de staff a cuentas de admin
+  if (isStaffAccessingAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            Acceso Restringido
+          </h2>
+          <p className="text-gray-600">
+            No tienes permisos para acceder a cuentas de administrador
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!targetUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div>Usuario no encontrado</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
         {targetUser && (
           <>
+          {!isEditingPayment && (
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle className="flex items-center gap-6">Información Personal
@@ -1161,7 +1118,7 @@ export default function UserDetailPage({
                             </div>
                           ) : (
                             <span className="inline-block px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
-                              Activo
+                              Al día
                             </span>
                           )}</div></div>
                           </CardTitle>
@@ -1255,7 +1212,7 @@ export default function UserDetailPage({
                             </div>
                           ) : (
                             <span className="inline-block px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
-                              Activo
+                              Al día
                             </span>
                           )}
                       </div>
@@ -1263,12 +1220,14 @@ export default function UserDetailPage({
 
                     {/* Botones de acción */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {(isAdmin || isStaff) && targetUser.role !== "admin" && (
                       <Button
                         onClick={() => setIsEditing(true)}
                         className="md:col-span-2"
                       >
                         Editar datos
                       </Button>
+                      )}
                       {/* Si es el propio usuario, mostrar botón para cambiar contraseña */}
                       {user?.id === targetUser.id && (
                         <Button
@@ -1278,7 +1237,7 @@ export default function UserDetailPage({
                           Cambiar mi contraseña
                         </Button>
                       )}
-                      {targetUser.role !== "admin" && isAdmin && (
+                      {targetUser.role !== "admin" && (isAdmin || isStaff) && (
                         <Button variant="outline" onClick={handleRoleChange}>
                           {targetUser.role === "staff"
                             ? "Quitar permisos de staff"
@@ -1294,6 +1253,7 @@ export default function UserDetailPage({
                       <Button variant="outline" onClick={handleEmailChange}>
                         Cambiar email
                       </Button>
+                      {isAdmin && (
                       <Button
                         variant="outline"
                         className="text-red-600 hover:text-red-700"
@@ -1303,6 +1263,7 @@ export default function UserDetailPage({
                           ? "Activar cuenta"
                           : "Suspender cuenta"}
                       </Button>
+                      )}
                       {targetUser.role !== "admin" && isAdmin && (
                         <Button
                           variant="destructive"
@@ -1434,7 +1395,7 @@ export default function UserDetailPage({
                 )}
               </CardContent>
             </Card>
-
+            )}
             {/* Historial de pagos */}
             <Card>
               <CardHeader>
@@ -1465,10 +1426,7 @@ export default function UserDetailPage({
                       <div
                         key={payment.id}
                         className="flex justify-between items-center p-4 border rounded-lg cursor-pointer hover:shadow-md transition-shadow"
-                        onClick={() => {
-                          setSelectedPayment(payment);
-                          setShowPaymentOptions(true);
-                        }}
+                        onClick={() => handleEditPayment(payment)}
                       >
                         <div>
                           <p className="font-medium">{payment.concept}</p>
@@ -1490,6 +1448,131 @@ export default function UserDetailPage({
                 )}
               </CardContent>
             </Card>
+
+
+            {/* Formulario de edición de pago */}
+            {isEditingPayment && editingPayment && (
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>Editar Pago</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handlePaymentSubmit} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Usuario
+                      </label>
+                      <input
+                        type="text"
+                        value={editingPayment.full_name}
+                        readOnly
+                        className="w-full px-3 py-2 border rounded-md bg-gray-50"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Concepto
+                      </label>
+                      <select
+                        value={paymentFormData.concept}
+                        onChange={(e) => {
+                          const concept = e.target.value as typeof paymentFormData.concept;
+                          setPaymentFormData({
+                            ...paymentFormData,
+                            concept,
+                            amount: getConceptAmount(concept),
+                          });
+                        }}
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      >
+                        <option value="Cuota mensual Muay Thai">
+                          Cuota mensual Muay Thai
+                        </option>
+                        <option value="Cuota mensual MMA">Cuota mensual MMA</option>
+                        <option value="Cuota mensual Muay Thai + MMA">
+                          Cuota mensual Muay Thai + MMA
+                        </option>
+                        <option value="Matrícula">Matrícula</option>
+                        <option value="Seguro Médico">Seguro Médico</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Importe (€)
+                      </label>
+                      <input
+                        type="number"
+                        value={paymentFormData.amount}
+                        onChange={(e) =>
+                          setPaymentFormData({
+                            ...paymentFormData,
+                            amount: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Método de Pago
+                      </label>
+                      <select
+                        value={paymentFormData.payment_method}
+                        onChange={(e) =>
+                          setPaymentFormData({
+                            ...paymentFormData,
+                            payment_method: e.target
+                              .value as typeof paymentFormData.payment_method,
+                          })
+                        }
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      >
+                        <option value="Efectivo">Efectivo</option>
+                        <option value="Bizum">Bizum</option>
+                        <option value="Transferencia">Transferencia</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Fecha de Pago
+                      </label>
+                      <input
+                        type="date"
+                        value={paymentFormData.payment_date}
+                        onChange={(e) =>
+                          setPaymentFormData({ ...paymentFormData, payment_date: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+
+                    <div className="flex gap-2 justify-evenly">
+                      <Button type="submit">Actualizar Pago</Button>
+                      <Button type="button" variant="outline" onClick={cancelPaymentForm}>
+                        Cancelar
+                      </Button>
+                      <Button 
+                        type="button" 
+                        variant="destructive" 
+                        onClick={() => handleDeletePayment(editingPayment)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </div>
@@ -1501,6 +1584,14 @@ export default function UserDetailPage({
         onConfirm={handleOwnPasswordReset}
       />
 
+      {/* Dialog para cambio de email */}
+      <ChangeEmailDialog
+        isOpen={showEmailDialog}
+        onClose={() => setShowEmailDialog(false)}
+        onConfirm={handleEmailConfirm}
+        currentEmail={targetUser?.email || ""}
+      />
+
       {/* Dialog para crear pago */}
       <CreatePaymentDialog
         isOpen={showCreatePaymentDialog}
@@ -1508,22 +1599,7 @@ export default function UserDetailPage({
         targetUser={targetUser}
       />
 
-      {/* Dialog de opciones de pago */}
-      <PaymentOptionsDialog
-        isOpen={showPaymentOptions}
-        onClose={() => setShowPaymentOptions(false)}
-        payment={selectedPayment}
-        onEdit={handleEditPayment}
-        onDelete={handleDeletePayment}
-      />
 
-      {/* Dialog para editar pago */}
-      <EditPaymentDialog
-        isOpen={showEditPaymentDialog}
-        onClose={() => setShowEditPaymentDialog(false)}
-        payment={selectedPayment}
-        onSave={fetchUserData}
-      />
 
       {/* Dialog para confirmar eliminación de usuario */}
       <DeleteUserDialog
@@ -1531,6 +1607,19 @@ export default function UserDetailPage({
         onClose={() => setShowDeleteDialog(false)}
         onConfirm={handleConfirmDelete}
         userName={targetUser?.name || ""}
+      />
+
+      {/* Dialog para confirmar suspensión/activación */}
+      <ConfirmDialog
+        open={showSuspendConfirm}
+        onOpenChange={setShowSuspendConfirm}
+        title={suspendAction === "suspend" ? "Suspender Cuenta" : "Activar Cuenta"}
+        description={`¿Estás seguro de que quieres ${
+          suspendAction === "suspend" ? "suspender" : "activar"
+        } esta cuenta?`}
+        confirmText={suspendAction === "suspend" ? "Suspender" : "Activar"}
+        variant={suspendAction === "suspend" ? "destructive" : "default"}
+        onConfirm={confirmSuspendToggle}
       />
     </div>
   );

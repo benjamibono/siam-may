@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireRole } from "@/lib/auth";
 
-// Utilizamos requireRole para asegurar que solo admins puedan acceder
+// Utilizamos requireRole para asegurar que admins y staff puedan acceder
 
 // GET - Obtener todos los usuarios
 export async function GET(request: NextRequest) {
-  const authResult = await requireRole(request, ["admin"]);
+  const authResult = await requireRole(request, ["admin", "staff"]);
   if ("error" in authResult) {
     return authResult.error;
   }
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
 // PUT - Actualizar usuario
 export async function PUT(request: NextRequest) {
-  const authResult = await requireRole(request, ["admin"]);
+  const authResult = await requireRole(request, ["admin", "staff"]);
   if ("error" in authResult) {
     return authResult.error;
   }
@@ -63,7 +63,7 @@ export async function PUT(request: NextRequest) {
 
 // DELETE - Eliminar usuario
 export async function DELETE(request: NextRequest) {
-  const authResult = await requireRole(request, ["admin"]);
+  const authResult = await requireRole(request, ["admin", "staff"]);
   if ("error" in authResult) {
     return authResult.error;
   }

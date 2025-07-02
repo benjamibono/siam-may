@@ -9,17 +9,20 @@ import { toast } from "sonner";
 import Image from "next/image";
 import { Users, Clock, ChevronDown, ChevronRight } from "lucide-react";
 import type { Tables } from "@/lib/supabase";
-import {
-  getCurrentMonthYear,
-} from "@/lib/payment-logic";
-import { 
-  parseSchedule, 
-  formatClassDaysForUser 
-} from "@/lib/utils";
+import { getCurrentMonthYear } from "@/lib/payment-logic";
+import { parseSchedule, formatClassDaysForUser } from "@/lib/utils";
 
 interface ClassWithEnrollment extends Tables<"classes"> {
   is_enrolled: boolean;
   enrollment_count: number;
+}
+
+interface AnnouncementWithProfile extends Tables<"announcements"> {
+  profiles?: {
+    name: string;
+    first_surname: string;
+    second_surname: string | null;
+  } | null;
 }
 
 // Función para obtener el icono apropiado según el tipo de clase
@@ -54,7 +57,9 @@ export default function UserClassesPage() {
     new Set()
   );
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
-
+  const [announcements, setAnnouncements] = useState<AnnouncementWithProfile[]>(
+    []
+  );
   const filterOptions = [
     { id: "MMA", label: "MMA" },
     { id: "Muay Thai", label: "Thai" },
@@ -62,6 +67,21 @@ export default function UserClassesPage() {
     { id: "Tarde", label: "Tarde" },
     { id: "Niños", label: "Niños" },
   ];
+
+  const fetchAnnouncements = async () => {
+    try {
+      const response = await fetch("/api/announcements");
+      const announcementsData = await response.json();
+      setAnnouncements(announcementsData);
+    } catch {
+      toast.error("Error al obtener los anuncios");
+    }
+  };
+  useEffect(() => {
+    if (user) {
+      fetchAnnouncements();
+    }
+  }, [user]);
 
   const toggleFilter = (filterId: string) => {
     setActiveFilters((prev) =>
@@ -350,6 +370,53 @@ export default function UserClassesPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
+        {/* Lista de anuncios existentes */}
+        {announcements.length > 0 && (
+          <div className="mb-4">
+            <div className="flex flex-col gap-2 justify-between">
+              <h2 className="text-xl font-semibold flex justify-center text-orange-400 mb-2">
+                {announcements.length > 1 ? "¡Atención a los anuncios! ⚠️" : "¡Atención al anuncio! ⚠️"}
+              </h2>
+              <div className="mb-4">
+                <div className="grid gap-4">
+                  {announcements.map((announcement) => (
+                    <Card
+                      key={announcement.id}
+                    >
+                      <CardHeader>
+                        <CardTitle className="flex items-center justify-between">
+                          <span className="text-lg text-balance">{announcement.title}</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-gray-700 text-pretty pb-4">
+                          {announcement.content}
+                        </p>
+                        <div className="flex flex-row gap-2 justify-between text-xs text-gray-500">
+                          Creado:{" "}
+                          {new Date(announcement.created_at).toLocaleDateString(
+                            "es-ES",
+                            {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )}
+                          <span className="text-xs text-gray-500">
+                            Por: {announcement.profiles?.name || "Usuario"}{" "}
+                            {announcement.profiles?.first_surname || ""}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Filtros */}
         <div className="mb-6">
           <div className="flex gap-2 items-center flex-balance justify-evenly">
@@ -366,14 +433,6 @@ export default function UserClassesPage() {
                 {option.label}
               </button>
             ))}
-            {activeFilters.length > 0 && (
-              <button
-                onClick={() => setActiveFilters([])}
-                className="px-3 py-1 text-sm text-gray-500 hover:text-gray-700 underline"
-              >
-                Limpiar filtros
-              </button>
-            )}
           </div>
         </div>
 

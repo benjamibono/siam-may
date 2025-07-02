@@ -1,27 +1,17 @@
+
 "use client";
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { useProfile } from "@/hooks/useProfile";
 import { toast } from "sonner";
 import Image from "next/image";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 
 export function AuthForm() {
-  const { user } = useProfile();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [showWelcomeDialog, setShowWelcomeDialog] = useState(false);
   const [profileData, setProfileData] = useState({
     name: "",
     first_surname: "",
@@ -31,8 +21,6 @@ export function AuthForm() {
   });
   const [loading, setLoading] = useState(false);
 
-  // Si el usuario ya está logueado, no mostrar el formulario
-  if (user) return null;
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,7 +103,7 @@ export function AuthForm() {
           if (profileError) {
             toast.error("Usuario creado pero error al actualizar perfil");
           } else {
-            setShowWelcomeDialog(true);
+            // setShowWelcomeDialog(true); // Ya está abierto por defecto
             // Reset form
             setEmail("");
             setPassword("");
@@ -143,48 +131,6 @@ export function AuthForm() {
 
   return (
     <>
-      <Dialog open={showWelcomeDialog} onOpenChange={setShowWelcomeDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>¡Bienvenido a SIAM!</DialogTitle>
-            <DialogDescription className="space-y-4 pt-4">
-              <p>
-                ¡Gracias por registrarte! Aquí tienes una breve guía de cómo funciona la aplicación:
-              </p>
-              <div className="space-y-2">
-                <h4 className="font-semibold">Estado de tu cuenta</h4>
-                <p>
-                  Tu cuenta está actualmente en estado &quot;pendiente&quot; hasta que realices tu primer pago.
-                  Una vez realizado, podrás acceder a todas las funcionalidades.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <h4 className="font-semibold">Inscripción a clases</h4>
-                <p>
-                  Podrás inscribirte a clases durante los primeros 5 días del mes.
-                  Después de este período, necesitarás tener un pago registrado para poder inscribirte.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <h4 className="font-semibold">Pagos</h4>
-                <p>
-                  Los pagos se realizan mensualmente. Puedes ver tu historial de pagos
-                  y el estado de tu cuenta en tu perfil.
-                </p>
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={() => {
-              setShowWelcomeDialog(false);
-              setIsLogin(true);
-            }}>
-              Entendido, iniciar sesión
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 max-h-[95vh] overflow-y-auto">
           {/* Logo */}

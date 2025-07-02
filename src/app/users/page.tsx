@@ -78,7 +78,12 @@ export default function UsersPage() {
   }, [user, isAdmin, isStaff, isLoading, refetch, router]);
 
   // Filtrar usuarios excluyendo el usuario actual
-  const usersExcludingCurrent = users.filter((u) => u.id !== user?.id);
+  let usersExcludingCurrent = users.filter((u) => u.id !== user?.id);
+  
+  // Si es staff (no admin), filtrar para ocultar cuentas de admin
+  if (isStaff && !isAdmin) {
+    usersExcludingCurrent = usersExcludingCurrent.filter((u) => u.role !== "admin");
+  }
 
   // Contar usuarios por status
   const totalUsers = usersExcludingCurrent.length;
@@ -114,7 +119,7 @@ export default function UsersPage() {
     filteredUsers = filteredUsers.filter((u) => u.status === filterType);
   }
 
-  // Ordenar usuarios según el filtro activo
+  // Ordenar usuarios según el filtro Al día
   filteredUsers.sort((a, b) => {
     if (filterType === "all") return 0;
     if (

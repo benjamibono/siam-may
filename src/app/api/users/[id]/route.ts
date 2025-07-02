@@ -194,17 +194,15 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Delete user from auth schema using admin client
-    const { error: deleteError } = await supabaseAdminAuth.auth.admin.deleteUser(
-      id,
-      true // Use soft delete for compliance and data retention
-    );
-
-    if (deleteError) {
-      throw deleteError;
+    // First, sign out the user from all sessions to force logout
+    try {
+      await supabaseAdminAuth.auth.admin.signOut(id, "global");
+    } catch (signOutError) {
+      console.error("Error signing out user before deletion:", signOutError);
+      // Continue with deletion even if sign out fails
     }
 
-    // Delete user profile from profiles table
+    // Delete user profile from profiles table first
     const { error: profileDeleteError } = await supabaseAdminAuth
       .from("profiles")
       .delete()
@@ -212,6 +210,16 @@ export async function DELETE(
 
     if (profileDeleteError) {
       throw profileDeleteError;
+    }
+
+    // Then delete user from auth schema using admin client
+    const { error: deleteError } = await supabaseAdminAuth.auth.admin.deleteUser(
+      id,
+      true // Use soft delete for compliance and data retention
+    );
+
+    if (deleteError) {
+      throw deleteError;
     }
 
     return NextResponse.json({ message: "User deleted successfully" });

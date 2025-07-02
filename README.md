@@ -84,8 +84,8 @@ pnpm dev         # next dev on http://localhost:3000
 I'm seeking a **Full-Stack / Frontend Engineering** role where I can craft delightful products.  _Siam May_ is a taste of how I blend **system-2 thinking**, relentless iteration, and UX empathy to ship production-ready code.
 
 If my work resonates with you:
-- Connect on **LinkedIn**: https://www.linkedin.com/in/your-profile
-- Shoot me an **email**: hello@yourdomain.dev
+- Connect on **LinkedIn**: https://www.linkedin.com/in/benjamibono
+- Shoot me an **email**: https://www.benjamibono.dev
 
 Let's build the next big thing together! 🥋✨
 

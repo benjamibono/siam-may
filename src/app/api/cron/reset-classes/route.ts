@@ -16,6 +16,12 @@ export async function GET(request: NextRequest) {
     const currentDay = now.toLocaleDateString("es-ES", { weekday: "long" });
     const currentDayCapitalized = currentDay.charAt(0).toUpperCase() + currentDay.slice(1);
 
+    // También obtener hora de Madrid para debug
+    const madridTime = new Date(now.toLocaleString("en-US", {timeZone: "Europe/Madrid"}));
+    const madridTimeString = madridTime.toTimeString().substring(0, 5);
+    const madridDay = madridTime.toLocaleDateString("es-ES", { weekday: "long" });
+    const madridDayCapitalized = madridDay.charAt(0).toUpperCase() + madridDay.slice(1);
+
     // Obtener todas las clases
     const { data: classes, error: classesError } = await supabaseAdmin
       .from("classes")
@@ -31,6 +37,8 @@ export async function GET(request: NextRequest) {
         debug: {
           currentTime,
           currentDay: currentDayCapitalized,
+          madridTime: madridTimeString,
+          madridDay: madridDayCapitalized,
         },
       });
     }
@@ -54,6 +62,8 @@ export async function GET(request: NextRequest) {
         debug: {
           currentTime,
           currentDay: currentDayCapitalized,
+          madridTime: madridTimeString,
+          madridDay: madridDayCapitalized,
           totalClasses: classes.length,
           classesInfo: classesDebugInfo,
         },
@@ -113,6 +123,8 @@ export async function GET(request: NextRequest) {
       debug: {
         currentTime,
         currentDay: currentDayCapitalized,
+        madridTime: madridTimeString,
+        madridDay: madridDayCapitalized,
         totalClasses: classes.length,
         classesEligibleForReset: classesToReset.length,
         classesInfo: classesDebugInfo,

@@ -97,8 +97,10 @@ export function shouldResetClass(schedule: string): boolean {
     return false;
   }
 
+  // Usar hora de Madrid/España en lugar de UTC
   const now = new Date();
-  const currentDay = now.getDay();
+  const madridTime = new Date(now.toLocaleString("en-US", {timeZone: "Europe/Madrid"}));
+  const currentDay = madridTime.getDay();
 
   const dayMappings: { [key: string]: number } = {
     Domingo: 0,
@@ -119,7 +121,7 @@ export function shouldResetClass(schedule: string): boolean {
     return false;
   }
 
-  // Solo verificar si HOY es día de clase
+  // Solo verificar si HOY es día de clase (en hora de Madrid)
   if (!classDayNumbers.includes(currentDay)) {
     return false;
   }
@@ -127,11 +129,11 @@ export function shouldResetClass(schedule: string): boolean {
   // Parsear la hora de fin
   const [endHour, endMinute] = endTime.split(':').map(Number);
   
-  // Crear fecha/hora de fin para hoy
-  const endTimeToday = new Date(now);
+  // Crear fecha/hora de fin para hoy en zona horaria de Madrid
+  const endTimeToday = new Date(madridTime);
   endTimeToday.setHours(endHour, endMinute, 0, 0);
   
-  const currentDateTime = now.getTime();
+  const currentDateTime = madridTime.getTime();
   const timeSinceEnd = currentDateTime - endTimeToday.getTime();
   
   // Resetear si la clase terminó hace entre 0 y 2 horas

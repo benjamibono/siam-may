@@ -74,21 +74,150 @@ export function getDayStatus(day: string): "today" | "tomorrow" | "other" {
   return "other";
 }
 
+/**
+ * Verifica si un usuario puede inscribirse en una clase
+ * (es decir, si la clase no ha empezado aún considerando la hora de Madrid)
+ */
+export function canEnrollInClass(days: string[], start: string): boolean {
+  const cleaned = days.map((d) => d.trim()).filter(Boolean);
+  
+  if (cleaned.length === 0 || !start) return false;
+
+  // Usar hora de Madrid/España
+  const now = new Date();
+  const madridTime = new Date(now.toLocaleString("en-US", {timeZone: "Europe/Madrid"}));
+  const currentDay = madridTime.getDay();
+  const currentTime = madridTime.toTimeString().substring(0, 5); // HH:MM format
+
+  const dayMappings: { [key: string]: number } = {
+    Domingo: 0,
+    Lunes: 1,
+    Martes: 2,
+    Miércoles: 3,
+    Jueves: 4,
+    Viernes: 5,
+    Sábado: 6,
+  };
+
+  const dayNames = [
+    "Domingo",
+    "Lunes",
+    "Martes",
+    "Miércoles",
+    "Jueves",
+    "Viernes",
+    "Sábado",
+  ];
+
+  // Convertir días de clase a números
+  const classDayNumbers = cleaned
+    .map((day) => dayMappings[day])
+    .filter((num) => num !== undefined);
+
+  if (classDayNumbers.length === 0) {
+    return false;
+  }
+
+  // Verificar si hoy es día de clase
+  const todayName = dayNames[currentDay];
+  if (cleaned.includes(todayName)) {
+    // Si hoy es día de clase, solo permitir inscripción si no ha empezado
+    return currentTime < start;
+  }
+
+  // Si hoy no es día de clase, siempre se puede inscribir
+  return true;
+}
+
+/**
+ * Obtiene el próximo día de clase disponible considerando la hora de Madrid
+ * Si la clase de hoy ya empezó, muestra la siguiente opción disponible
+ */
+export function getNextAvailableClassTime(days: string[], start: string, end: string): string {
+  const cleaned = days.map((d) => d.trim()).filter(Boolean);
+  const ordered = sortDays(cleaned);
+  
+  if (ordered.length === 0 || !start || !end) return "Sin horario definido";
+
+  // Usar hora de Madrid/España
+  const now = new Date();
+  const madridTime = new Date(now.toLocaleString("en-US", {timeZone: "Europe/Madrid"}));
+  const currentDay = madridTime.getDay();
+  const currentTime = madridTime.toTimeString().substring(0, 5); // HH:MM format
+
+  const dayMappings: { [key: string]: number } = {
+    Domingo: 0,
+    Lunes: 1,
+    Martes: 2,
+    Miércoles: 3,
+    Jueves: 4,
+    Viernes: 5,
+    Sábado: 6,
+  };
+
+  const dayNames = [
+    "Domingo",
+    "Lunes",
+    "Martes",
+    "Miércoles",
+    "Jueves",
+    "Viernes",
+    "Sábado",
+  ];
+
+  // Convertir días de clase a números
+  const classDayNumbers = ordered
+    .map((day) => dayMappings[day])
+    .filter((num) => num !== undefined);
+
+  if (classDayNumbers.length === 0) {
+    return "Sin horario definido";
+  }
+
+  // Verificar si hoy es día de clase y aún no ha empezado
+  const todayName = dayNames[currentDay];
+  if (ordered.includes(todayName) && currentTime < start) {
+    return `Hoy ${start} - ${end}`;
+  }
+
+  // Si hoy es día de clase pero ya empezó, buscar el siguiente día disponible
+  let nextDay = -1;
+  let daysToAdd = 1;
+
+  // Buscar en los próximos 7 días
+  while (daysToAdd <= 7) {
+    const checkDay = (currentDay + daysToAdd) % 7;
+    if (classDayNumbers.includes(checkDay)) {
+      nextDay = checkDay;
+      break;
+    }
+    daysToAdd++;
+  }
+
+  if (nextDay === -1) {
+    return "Sin próximas clases";
+  }
+
+  const nextDayName = dayNames[nextDay];
+
+  // Formatear la fecha
+  if (daysToAdd === 1) {
+    return `Mañana ${start} - ${end}`;
+  } else if (daysToAdd <= 6) {
+    return ` ${nextDayName} ${start} - ${end}`;
+  } else {
+    return `${nextDayName} ${start} - ${end}`;
+  }
+}
+
 export function formatClassDaysForUser(days: string[], start: string, end: string): string {
   const cleaned = days.map((d) => d.trim()).filter(Boolean);
   const ordered = sortDays(cleaned);
   
   if (ordered.length === 0 || !start || !end) return "Sin horario definido";
 
-  // Buscar el próximo día de clase (hoy o mañana)
-  for (const day of ordered) {
-    const status = getDayStatus(day);
-    if (status === "today") return `Hoy ${start} - ${end}`;
-    if (status === "tomorrow") return `Mañana ${start} - ${end}`;
-  }
-
-  // Si no es hoy ni mañana, mostrar el primer día de la semana
-  return `${ordered[0]} ${start} - ${end}`;
+  // Usar la nueva función que considera si la clase ya empezó
+  return getNextAvailableClassTime(ordered, start, end);
 }
 
 // -----------------------------------------------------------------------------

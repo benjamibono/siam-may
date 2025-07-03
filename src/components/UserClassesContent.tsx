@@ -18,7 +18,8 @@ import {
 import { 
   parseSchedule, 
   formatClassDaysForUser,
-  formatDaysForManagement 
+  formatDaysForManagement,
+  canEnrollInClass 
 } from "@/lib/utils";
 
 interface ClassWithEnrollment {
@@ -357,6 +358,7 @@ export function UserClassesContent() {
               const parsed = parseSchedule(cls.schedule);
               const icon = getClassIcon(cls.name, cls.description || undefined);
               const isClassFull = cls.enrollment_count >= cls.capacity;
+              const canEnroll = canEnrollInClass(parsed.days, parsed.start);
               
               return (
                 <Card key={cls.id} className="hover:shadow-md transition-shadow">
@@ -409,10 +411,12 @@ export function UserClassesContent() {
                     <Button
                       onClick={() => handleEnrollment(cls.id, false)}
                       className="w-full"
-                      disabled={!enrollmentStatus.canEnroll || isClassFull}
+                      disabled={!enrollmentStatus.canEnroll || isClassFull || !canEnroll}
                     >
                       {isClassFull
                         ? "Clase Llena"
+                        : !canEnroll
+                        ? "Clase Empezada"
                         : !enrollmentStatus.canEnroll
                         ? "No disponible"
                         : "Inscribirse"}

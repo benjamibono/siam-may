@@ -10,7 +10,7 @@ import Image from "next/image";
 import { Users, Clock, ChevronDown, ChevronRight } from "lucide-react";
 import type { Tables } from "@/lib/supabase";
 import { getCurrentMonthYear } from "@/lib/payment-logic";
-import { parseSchedule, formatClassDaysForUser } from "@/lib/utils";
+import { parseSchedule, formatClassDaysForUser, canEnrollInClass } from "@/lib/utils";
 
 interface ClassWithEnrollment extends Tables<"classes"> {
   is_enrolled: boolean;
@@ -280,6 +280,7 @@ export default function UserClassesPage() {
     const parsed = parseSchedule(cls.schedule);
     const icon = getClassIcon(cls.name, cls.description || undefined);
     const isDescriptionExpanded = expandedDescriptions.has(cls.id);
+    const canEnroll = canEnrollInClass(parsed.days, parsed.start);
 
     return (
       <Card
@@ -331,12 +332,14 @@ export default function UserClassesPage() {
             variant={isEnrolled ? "outline" : "default"}
             onClick={() => handleEnrollment(cls.id, isEnrolled, cls.name)}
             className="w-full"
-            disabled={!isEnrolled && cls.enrollment_count >= cls.capacity}
+            disabled={!isEnrolled && (cls.enrollment_count >= cls.capacity || !canEnroll)}
           >
             {isEnrolled
               ? "Desinscribirse"
               : cls.enrollment_count >= cls.capacity
               ? "Clase Llena"
+              : !canEnroll
+              ? "Demasiado tarde"
               : "Inscribirse"}
           </Button>
         </CardContent>

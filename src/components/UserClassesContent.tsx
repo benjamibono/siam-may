@@ -358,7 +358,7 @@ export function UserClassesContent() {
               const parsed = parseSchedule(cls.schedule);
               const icon = getClassIcon(cls.name, cls.description || undefined);
               const isClassFull = cls.enrollment_count >= cls.capacity;
-              const canEnroll = canEnrollInClass(parsed.days, parsed.start);
+              const canEnroll = canEnrollInClass(parsed.days, parsed.start, parsed.end);
               
               return (
                 <Card key={cls.id} className="hover:shadow-md transition-shadow">

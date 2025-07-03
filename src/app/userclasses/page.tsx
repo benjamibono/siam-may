@@ -280,7 +280,7 @@ export default function UserClassesPage() {
     const parsed = parseSchedule(cls.schedule);
     const icon = getClassIcon(cls.name, cls.description || undefined);
     const isDescriptionExpanded = expandedDescriptions.has(cls.id);
-    const canEnroll = canEnrollInClass(parsed.days, parsed.start);
+    const canEnroll = canEnrollInClass(parsed.days, parsed.start, parsed.end);
 
     return (
       <Card

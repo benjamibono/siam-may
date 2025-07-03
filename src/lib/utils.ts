@@ -78,10 +78,10 @@ export function getDayStatus(day: string): "today" | "tomorrow" | "other" {
  * Verifica si un usuario puede inscribirse en una clase
  * (es decir, si la clase no ha empezado aún considerando la hora de Madrid)
  */
-export function canEnrollInClass(days: string[], start: string): boolean {
+export function canEnrollInClass(days: string[], start: string, end: string): boolean {
   const cleaned = days.map((d) => d.trim()).filter(Boolean);
   
-  if (cleaned.length === 0 || !start) return false;
+  if (cleaned.length === 0 || !start || !end) return false;
 
   // Usar hora de Madrid/España
   const now = new Date();
@@ -121,8 +121,8 @@ export function canEnrollInClass(days: string[], start: string): boolean {
   // Verificar si hoy es día de clase
   const todayName = dayNames[currentDay];
   if (cleaned.includes(todayName)) {
-    // Si hoy es día de clase, solo permitir inscripción si no ha empezado
-    return currentTime < start;
+    // Si hoy es día de clase, no permitir inscripción solo durante la clase (entre start y end)
+    return currentTime < start || currentTime >= end;
   }
 
   // Si hoy no es día de clase, siempre se puede inscribir

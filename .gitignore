@@ -38,3 +38,5 @@ next-env.d.ts
 
 TODO.txt
 vercel.json
+GITHUB_ACTIONS_SETUP.md
+test-cron-endpoints.sh

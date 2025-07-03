@@ -1,0 +1,112 @@
+name: Cron Jobs
+
+on:
+  schedule:
+    # Reinicio de clases - cada 15 minutos (para resetear justo cuando terminan)
+    - cron: '*/15 * * * *'
+    # Procesamiento de pagos - cada 2 horas (verificación frecuente)
+    - cron: '0 */2 * * *'
+    # Limpieza de anuncios - cada 6 horas (mantenimiento ligero)
+    - cron: '0 */6 * * *'
+  
+  # Permitir ejecución manual
+  workflow_dispatch:
+    inputs:
+      job_type:
+        description: 'Tipo de trabajo a ejecutar'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - cleanup-announcements
+          - reset-classes
+          - process-payments
+
+jobs:
+  cleanup-announcements:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 */6 * * *' || github.event.inputs.job_type == 'cleanup-announcements' || github.event.inputs.job_type == 'all'
+    steps:
+      - name: Cleanup Announcements
+        run: |
+          echo "🧹 Ejecutando limpieza de anuncios..."
+          response=$(curl -s -w "\n%{http_code}" -X GET "${{ secrets.VERCEL_URL }}/api/cron/cleanup-announcements" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n -1)
+          
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+          
+          if [ "$http_code" -ne 200 ]; then
+            echo "❌ Error en limpieza de anuncios"
+            exit 1
+          else
+            echo "✅ Limpieza de anuncios completada"
+          fi
+
+  reset-classes:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '*/15 * * * *' || github.event.inputs.job_type == 'reset-classes' || github.event.inputs.job_type == 'all'
+    steps:
+      - name: Reset Classes
+        run: |
+          echo "🔄 Ejecutando reinicio de clases..."
+          response=$(curl -s -w "\n%{http_code}" -X GET "${{ secrets.VERCEL_URL }}/api/cron/reset-classes" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n -1)
+          
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+          
+          if [ "$http_code" -ne 200 ]; then
+            echo "❌ Error en reinicio de clases"
+            exit 1
+          else
+            echo "✅ Reinicio de clases completado"
+          fi
+
+  process-payments:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 */2 * * *' || github.event.inputs.job_type == 'process-payments' || github.event.inputs.job_type == 'all'
+    steps:
+      - name: Process Payments
+        run: |
+          echo "💳 Ejecutando procesamiento de pagos..."
+          response=$(curl -s -w "\n%{http_code}" -X GET "${{ secrets.VERCEL_URL }}/api/cron/process-payments" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n -1)
+          
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+          
+          if [ "$http_code" -ne 200 ]; then
+            echo "❌ Error en procesamiento de pagos"
+            exit 1
+          else
+            echo "✅ Procesamiento de pagos completado"
+          fi
+
+  # Trabajo de notificación en caso de fallos
+  notify-on-failure:
+    runs-on: ubuntu-latest
+    needs: [cleanup-announcements, reset-classes, process-payments]
+    if: failure()
+    steps:
+      - name: Notify Failure
+        run: |
+          echo "❌ Uno o más trabajos cron han fallado"
+          echo "Revisa los logs para más detalles"
+          # Aquí puedes añadir notificaciones a Slack, Discord, etc.
+          # curl -X POST "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK" \
+          #   -H "Content-type: application/json" \
+          #   --data '{"text":"❌ Cron jobs failed in ${{ github.repository }}"}' 

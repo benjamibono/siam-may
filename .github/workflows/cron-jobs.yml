@@ -31,9 +31,12 @@ jobs:
       - name: Cleanup Announcements
         run: |
           echo "🧹 Ejecutando limpieza de anuncios..."
+          echo "🔍 Debug - URL: ${{ secrets.VERCEL_URL }}/api/cron/cleanup-announcements"
+          
           response=$(curl -s -w "\n%{http_code}" -X GET "${{ secrets.VERCEL_URL }}/api/cron/cleanup-announcements" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -H "Content-Type: application/json")
+            -H "Content-Type: application/json" \
+            -L)
           
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | head -n -1)
@@ -41,11 +44,11 @@ jobs:
           echo "HTTP Status: $http_code"
           echo "Response: $body"
           
-          if [ "$http_code" -ne 200 ]; then
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ Limpieza de anuncios completada"
+          else
             echo "❌ Error en limpieza de anuncios"
             exit 1
-          else
-            echo "✅ Limpieza de anuncios completada"
           fi
 
   reset-classes:
@@ -55,9 +58,13 @@ jobs:
       - name: Reset Classes
         run: |
           echo "🔄 Ejecutando reinicio de clases..."
+          echo "🔍 Debug - URL: ${{ secrets.VERCEL_URL }}/api/cron/reset-classes"
+          echo "🔍 Debug - Secret length: ${#CRON_SECRET}"
+          
           response=$(curl -s -w "\n%{http_code}" -X GET "${{ secrets.VERCEL_URL }}/api/cron/reset-classes" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -H "Content-Type: application/json")
+            -H "Content-Type: application/json" \
+            -L --max-redirs 0)
           
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | head -n -1)
@@ -65,12 +72,35 @@ jobs:
           echo "HTTP Status: $http_code"
           echo "Response: $body"
           
-          if [ "$http_code" -ne 200 ]; then
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ Reinicio de clases completado"
+          elif [ "$http_code" -eq 308 ] || [ "$http_code" -eq 301 ] || [ "$http_code" -eq 302 ]; then
+            echo "⚠️  Redirect detectado - verificando URL..."
+            echo "Intentando con curl -L (siguiendo redirects)..."
+            
+            response2=$(curl -s -w "\n%{http_code}" -X GET "${{ secrets.VERCEL_URL }}/api/cron/reset-classes" \
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+              -H "Content-Type: application/json" \
+              -L)
+            
+            http_code2=$(echo "$response2" | tail -n1)
+            body2=$(echo "$response2" | head -n -1)
+            
+            echo "HTTP Status (after redirect): $http_code2"
+            echo "Response (after redirect): $body2"
+            
+            if [ "$http_code2" -ne 200 ]; then
+              echo "❌ Error en reinicio de clases después del redirect"
+              exit 1
+            else
+              echo "✅ Reinicio de clases completado (después del redirect)"
+            fi
+          else
             echo "❌ Error en reinicio de clases"
             exit 1
-          else
-            echo "✅ Reinicio de clases completado"
           fi
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
 
   process-payments:
     runs-on: ubuntu-latest
@@ -79,9 +109,12 @@ jobs:
       - name: Process Payments
         run: |
           echo "💳 Ejecutando procesamiento de pagos..."
+          echo "🔍 Debug - URL: ${{ secrets.VERCEL_URL }}/api/cron/process-payments"
+          
           response=$(curl -s -w "\n%{http_code}" -X GET "${{ secrets.VERCEL_URL }}/api/cron/process-payments" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -H "Content-Type: application/json")
+            -H "Content-Type: application/json" \
+            -L)
           
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | head -n -1)
@@ -89,11 +122,11 @@ jobs:
           echo "HTTP Status: $http_code"
           echo "Response: $body"
           
-          if [ "$http_code" -ne 200 ]; then
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ Procesamiento de pagos completado"
+          else
             echo "❌ Error en procesamiento de pagos"
             exit 1
-          else
-            echo "✅ Procesamiento de pagos completado"
           fi
 
   # Trabajo de notificación en caso de fallos

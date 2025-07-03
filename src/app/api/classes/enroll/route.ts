@@ -130,11 +130,12 @@ async function enrollmentHandler(request: NextRequest): Promise<NextResponse> {
         return NextResponse.json({ error: message }, { status: 403 });
       }
 
-      // Obtener último pago del usuario
+      // Obtener último pago de cuota mensual del usuario (excluyendo seguro médico y matrícula)
       const { data: lastPayment } = await supabaseAdmin
         .from("payments")
         .select("concept, payment_date")
         .eq("user_id", user.id)
+        .not("concept", "in", '("Seguro Médico","Matrícula")')
         .order("payment_date", { ascending: false })
         .limit(1)
         .single();

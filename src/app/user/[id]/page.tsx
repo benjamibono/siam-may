@@ -168,241 +168,7 @@ const ChangeEmailDialog = ({
   );
 };
 
-// Componente Dialog para crear pago
-const CreatePaymentDialog = ({
-  isOpen,
-  onClose,
-  targetUser,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  targetUser: Tables<"profiles"> | null;
-}) => {
-  const [formData, setFormData] = useState({
-    user_id: "",
-    full_name: "",
-    concept: "Cuota mensual Muay Thai" as
-      | "Cuota mensual Muay Thai"
-      | "Cuota mensual MMA"
-      | "Cuota mensual Muay Thai + MMA"
-      | "Matrícula"
-      | "Seguro Médico",
-    amount: 30,
-    payment_method: "Efectivo" as "Efectivo" | "Bizum" | "Transferencia",
-    payment_date: new Date().toISOString().split("T")[0],
-  });
 
-  useEffect(() => {
-    if (isOpen && targetUser) {
-      // Pre-rellenar con datos del usuario objetivo
-      setFormData((prev) => ({
-        ...prev,
-        user_id: targetUser.id,
-        full_name: `${targetUser.name || ""} ${
-          targetUser.first_surname || ""
-        } ${targetUser.second_surname || ""}`.trim(),
-      }));
-    }
-  }, [isOpen, targetUser]);
-
-  const getConceptAmount = (concept: string) => {
-    switch (concept) {
-      case "Cuota mensual Muay Thai":
-        return 30;
-      case "Cuota mensual MMA":
-        return 45;
-      case "Cuota mensual Muay Thai + MMA":
-        return 60;
-      case "Matrícula":
-        return 30;
-      case "Seguro Médico":
-        return 30;
-      default:
-        return 30;
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.user_id || !formData.full_name) {
-      toast.error("Datos del usuario requeridos");
-      return;
-    }
-
-    try {
-      const { error } = await supabase.from("payments").insert(formData);
-
-      if (error) throw error;
-      toast.success("Pago registrado correctamente");
-
-      // Procesar automáticamente el estado del usuario después de registrar un pago
-      try {
-        const { data: session } = await supabase.auth.getSession();
-        if (session.session) {
-          const response = await fetch(
-            `/api/payments/process-status?userId=${formData.user_id}`,
-            {
-              headers: {
-                Authorization: `Bearer ${session.session.access_token}`,
-              },
-            }
-          );
-
-          if (response.ok) {
-            const result = await response.json();
-            if (result.statusChanged) {
-              toast.success(
-                `Estado del usuario actualizado a: ${
-                  result.newStatus === "active"
-                    ? "Al día"
-                    : result.newStatus === "pending"
-                    ? "Pendiente"
-                    : "Suspendido"
-                }`
-              );
-            }
-          }
-        }
-      } catch (statusError) {
-        console.error("Error updating user status:", statusError);
-        // No mostrar error al usuario ya que el pago se registró correctamente
-      }
-
-      // Reset form y cerrar dialog
-      setFormData({
-        user_id: "",
-        full_name: "",
-        concept: "Cuota mensual Muay Thai",
-        amount: 30,
-        payment_method: "Efectivo",
-        payment_date: new Date().toISOString().split("T")[0],
-      });
-      onClose();
-      // Recargar la página para mostrar el nuevo pago
-      window.location.reload();
-    } catch (error: unknown) {
-      console.error("Error saving payment:", error);
-      toast.error("Error al guardar el pago");
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <h3 className="text-lg font-semibold mb-4">Registrar Nuevo Pago</h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Usuario
-            </label>
-            <input
-              type="text"
-              value={formData.full_name}
-              readOnly
-              className="w-full px-3 py-2 border rounded-md bg-gray-50"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Concepto
-            </label>
-            <select
-              value={formData.concept}
-              onChange={(e) => {
-                const concept = e.target.value as typeof formData.concept;
-                setFormData({
-                  ...formData,
-                  concept,
-                  amount: getConceptAmount(concept),
-                });
-              }}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            >
-              <option value="Cuota mensual Muay Thai">
-                Cuota mensual Muay Thai
-              </option>
-              <option value="Cuota mensual MMA">Cuota mensual MMA</option>
-              <option value="Cuota mensual Muay Thai + MMA">
-                Cuota mensual Muay Thai + MMA
-              </option>
-              <option value="Matrícula">Matrícula</option>
-              <option value="Seguro Médico">Seguro Médico</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Importe (€)
-            </label>
-            <input
-              type="number"
-              value={formData.amount}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  amount: parseFloat(e.target.value) || 0,
-                })
-              }
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-              min="0"
-              step="0.01"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Método de Pago
-            </label>
-            <select
-              value={formData.payment_method}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  payment_method: e.target
-                    .value as typeof formData.payment_method,
-                })
-              }
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            >
-              <option value="Efectivo">Efectivo</option>
-              <option value="Bizum">Bizum</option>
-              <option value="Transferencia">Transferencia</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Fecha de Pago
-            </label>
-            <input
-              type="date"
-              value={formData.payment_date}
-              onChange={(e) =>
-                setFormData({ ...formData, payment_date: e.target.value })
-              }
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-
-          <div className="flex gap-2 justify-end">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit">Registrar Pago</Button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
 
 
 
@@ -457,7 +223,7 @@ export default function UserDetailPage({
   const [isEditing, setIsEditing] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [showEmailDialog, setShowEmailDialog] = useState(false);
-  const [showCreatePaymentDialog, setShowCreatePaymentDialog] = useState(false);
+  const [isCreatingPayment, setIsCreatingPayment] = useState(false);
   const [isEditingPayment, setIsEditingPayment] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Tables<"payments"> | null>(null);
   const [paymentFormData, setPaymentFormData] = useState({
@@ -966,6 +732,80 @@ export default function UserDetailPage({
     }
   };
 
+  const handleCreatePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetUser) return;
+
+    const createPaymentData = {
+      user_id: targetUser.id,
+      full_name: `${targetUser.name || ""} ${targetUser.first_surname || ""} ${targetUser.second_surname || ""}`.trim(),
+      ...paymentFormData,
+    };
+
+    try {
+      const { error } = await supabase.from("payments").insert(createPaymentData);
+
+      if (error) throw error;
+      toast.success("Pago registrado correctamente");
+
+      // Procesar automáticamente el estado del usuario después de registrar un pago
+      try {
+        const { data: session } = await supabase.auth.getSession();
+        if (session.session) {
+          const response = await fetch(
+            `/api/payments/process-status?userId=${createPaymentData.user_id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${session.session.access_token}`,
+              },
+            }
+          );
+
+          if (response.ok) {
+            const result = await response.json();
+            if (result.statusChanged) {
+              toast.success(
+                `Estado del usuario actualizado a: ${
+                  result.newStatus === "active"
+                    ? "Al día"
+                    : result.newStatus === "pending"
+                    ? "Pendiente"
+                    : "Suspendido"
+                }`
+              );
+            }
+          }
+        }
+      } catch (statusError) {
+        console.error("Error updating user status:", statusError);
+        // No mostrar error al usuario ya que el pago se registró correctamente
+      }
+
+      // Reset form y cerrar formulario
+      setPaymentFormData({
+        concept: "Cuota mensual Muay Thai",
+        amount: 30,
+        payment_method: "Efectivo",
+        payment_date: new Date().toISOString().split("T")[0],
+      });
+      setIsCreatingPayment(false);
+      fetchUserData(); // Refresh user data
+    } catch (error: unknown) {
+      console.error("Error saving payment:", error);
+      toast.error("Error al guardar el pago");
+    }
+  };
+
+  const cancelCreatePayment = () => {
+    setPaymentFormData({
+      concept: "Cuota mensual Muay Thai",
+      amount: 30,
+      payment_method: "Efectivo",
+      payment_date: new Date().toISOString().split("T")[0],
+    });
+    setIsCreatingPayment(false);
+  };
+
   const handleDeleteUser = async () => {
     if (!targetUser) return;
     setShowDeleteDialog(true);
@@ -1056,7 +896,7 @@ export default function UserDetailPage({
       <div className="max-w-4xl mx-auto px-4">
         {targetUser && (
           <>
-          {!isEditingPayment && (
+          {!isEditingPayment && !isCreatingPayment && (
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle className="flex items-center gap-6">Información Personal
@@ -1403,7 +1243,7 @@ export default function UserDetailPage({
                   <CardTitle>Historial de Pagos</CardTitle>
                   {(isAdmin || isStaff) && (
                     <Button
-                      onClick={() => setShowCreatePaymentDialog(true)}
+                      onClick={() => setIsCreatingPayment(true)}
                       size="sm"
                     >
                       <Plus className="h-4 w-4 mr-2" />
@@ -1449,6 +1289,123 @@ export default function UserDetailPage({
               </CardContent>
             </Card>
 
+
+            {/* Formulario de creación de pago */}
+            {isCreatingPayment && (
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>Crear Nuevo Pago</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleCreatePayment} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Usuario
+                      </label>
+                      <input
+                        type="text"
+                        value={`${targetUser?.name || ""} ${targetUser?.first_surname || ""} ${targetUser?.second_surname || ""}`.trim()}
+                        readOnly
+                        className="w-full px-3 py-2 border rounded-md bg-gray-50"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Concepto
+                      </label>
+                      <select
+                        value={paymentFormData.concept}
+                        onChange={(e) => {
+                          const concept = e.target.value as typeof paymentFormData.concept;
+                          setPaymentFormData({
+                            ...paymentFormData,
+                            concept,
+                            amount: getConceptAmount(concept),
+                          });
+                        }}
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      >
+                        <option value="Cuota mensual Muay Thai">
+                          Cuota mensual Muay Thai
+                        </option>
+                        <option value="Cuota mensual MMA">Cuota mensual MMA</option>
+                        <option value="Cuota mensual Muay Thai + MMA">
+                          Cuota mensual Muay Thai + MMA
+                        </option>
+                        <option value="Matrícula">Matrícula</option>
+                        <option value="Seguro Médico">Seguro Médico</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Importe (€)
+                      </label>
+                      <input
+                        type="number"
+                        value={paymentFormData.amount}
+                        onChange={(e) =>
+                          setPaymentFormData({
+                            ...paymentFormData,
+                            amount: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Método de Pago
+                      </label>
+                      <select
+                        value={paymentFormData.payment_method}
+                        onChange={(e) =>
+                          setPaymentFormData({
+                            ...paymentFormData,
+                            payment_method: e.target
+                              .value as typeof paymentFormData.payment_method,
+                          })
+                        }
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      >
+                        <option value="Efectivo">Efectivo</option>
+                        <option value="Bizum">Bizum</option>
+                        <option value="Transferencia">Transferencia</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Fecha de Pago
+                      </label>
+                      <input
+                        type="date"
+                        value={paymentFormData.payment_date}
+                        onChange={(e) =>
+                          setPaymentFormData({ ...paymentFormData, payment_date: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+
+                    <div className="flex gap-2 justify-evenly">
+                      <Button type="submit">Registrar Pago</Button>
+                      <Button type="button" variant="outline" onClick={cancelCreatePayment}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Formulario de edición de pago */}
             {isEditingPayment && editingPayment && (
@@ -1592,12 +1549,7 @@ export default function UserDetailPage({
         currentEmail={targetUser?.email || ""}
       />
 
-      {/* Dialog para crear pago */}
-      <CreatePaymentDialog
-        isOpen={showCreatePaymentDialog}
-        onClose={() => setShowCreatePaymentDialog(false)}
-        targetUser={targetUser}
-      />
+
 
 
 

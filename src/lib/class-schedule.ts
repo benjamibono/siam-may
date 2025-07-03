@@ -88,31 +88,56 @@ export function getNextClassDay(schedule: string): string {
 
 /**
  * Verifica si una clase ha terminado y debería reiniciarse
+ * Solo resetea clases que han terminado en las últimas 2 horas
  */
 export function shouldResetClass(schedule: string): boolean {
-  const { days, end: endTime } = parseSchedule(schedule);
+  const { days, start: startTime, end: endTime } = parseSchedule(schedule);
 
-  if (days.length === 0 || !endTime) {
+  if (days.length === 0 || !startTime || !endTime) {
     return false;
   }
 
   const now = new Date();
-  const today = now.getDay();
-  const currentTime = now.toTimeString().substring(0, 5);
+  const currentDay = now.getDay();
 
-  const dayNames = [
-    "Domingo",
-    "Lunes",
-    "Martes",
-    "Miércoles",
-    "Jueves",
-    "Viernes",
-    "Sábado",
-  ];
-  const todayName = dayNames[today];
+  const dayMappings: { [key: string]: number } = {
+    Domingo: 0,
+    Lunes: 1,
+    Martes: 2,
+    Miércoles: 3,
+    Jueves: 4,
+    Viernes: 5,
+    Sábado: 6,
+  };
 
-  // Si hoy es día de clase y ya pasó la hora de fin
-  return days.includes(todayName) && currentTime > endTime;
+  // Convertir días de clase a números
+  const classDayNumbers = days
+    .map((day) => dayMappings[day])
+    .filter((num) => num !== undefined);
+
+  if (classDayNumbers.length === 0) {
+    return false;
+  }
+
+  // Solo verificar si HOY es día de clase
+  if (!classDayNumbers.includes(currentDay)) {
+    return false;
+  }
+
+  // Parsear la hora de fin
+  const [endHour, endMinute] = endTime.split(':').map(Number);
+  
+  // Crear fecha/hora de fin para hoy
+  const endTimeToday = new Date(now);
+  endTimeToday.setHours(endHour, endMinute, 0, 0);
+  
+  const currentDateTime = now.getTime();
+  const timeSinceEnd = currentDateTime - endTimeToday.getTime();
+  
+  // Resetear si la clase terminó hace entre 0 y 2 horas
+  const twoHoursInMs = 2 * 60 * 60 * 1000;
+  
+  return timeSinceEnd > 0 && timeSinceEnd <= twoHoursInMs;
 }
 
 /**

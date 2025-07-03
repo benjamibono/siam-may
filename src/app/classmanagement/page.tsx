@@ -1097,8 +1097,10 @@ export default function ClassManagementPage() {
         >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>
+              <DialogTitle className="text-center text-sm leading-normal">
                 Participantes de {selectedClassForEnrollments?.name}
+                <br />
+                {selectedClassForEnrollments?.schedule}
               </DialogTitle>
             </DialogHeader>
             <div className="flex flex-col gap-2">

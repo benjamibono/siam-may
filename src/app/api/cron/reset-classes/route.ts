@@ -11,11 +11,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // const now = new Date(); // Not used in this context
-    // Removed unused variables
-    // const currentTime = now.toTimeString().substring(0, 5);
-    // const currentDay = now.toLocaleDateString("es-ES", { weekday: "long" });
-    // const currentDayCapitalized = currentDay.charAt(0).toUpperCase() + currentDay.slice(1);
+    const now = new Date();
+    const currentTime = now.toTimeString().substring(0, 5);
+    const currentDay = now.toLocaleDateString("es-ES", { weekday: "long" });
+    const currentDayCapitalized = currentDay.charAt(0).toUpperCase() + currentDay.slice(1);
 
     // Obtener todas las clases
     const { data: classes, error: classesError } = await supabaseAdmin
@@ -29,29 +28,53 @@ export async function GET(request: NextRequest) {
         success: true,
         message: "No hay clases para verificar",
         timestamp: new Date().toISOString(),
+        debug: {
+          currentTime,
+          currentDay: currentDayCapitalized,
+        },
       });
     }
 
     // Obtener clases que deberían reiniciarse
     const classesToReset = getClassesToReset(classes);
 
+    // Crear información de debug para todas las clases
+    const classesDebugInfo = classes.map((cls) => ({
+      id: cls.id,
+      name: cls.name,
+      schedule: cls.schedule,
+      shouldReset: classesToReset.includes(cls.id),
+    }));
+
     if (classesToReset.length === 0) {
       return NextResponse.json({
         success: true,
         message: "No hay clases que necesiten reiniciarse",
         timestamp: new Date().toISOString(),
-        checked: classes.length,
+        debug: {
+          currentTime,
+          currentDay: currentDayCapitalized,
+          totalClasses: classes.length,
+          classesInfo: classesDebugInfo,
+        },
       });
     }
 
     let resetCount = 0;
     const resetDetails = [];
+    const errors = [];
 
     // Reiniciar cada clase (vaciar inscripciones)
     for (const classId of classesToReset) {
       const classInfo = classes.find((c) => c.id === classId);
 
       try {
+        // Contar inscripciones antes de eliminar
+        const { count: enrollmentCount } = await supabaseAdmin
+          .from("class_enrollments")
+          .select("*", { count: "exact", head: true })
+          .eq("class_id", classId);
+
         // Eliminar todas las inscripciones de esta clase
         const { error: deleteError } = await supabaseAdmin
           .from("class_enrollments")
@@ -59,6 +82,11 @@ export async function GET(request: NextRequest) {
           .eq("class_id", classId);
 
         if (deleteError) {
+          errors.push({
+            classId,
+            className: classInfo?.name || "Desconocida",
+            error: deleteError.message,
+          });
           continue;
         }
 
@@ -67,26 +95,40 @@ export async function GET(request: NextRequest) {
           classId,
           className: classInfo?.name || "Desconocida",
           schedule: classInfo?.schedule || "",
+          enrollmentsRemoved: enrollmentCount || 0,
           resetAt: new Date().toISOString(),
         });
-      } catch {
-        // Skip individual class errors
+      } catch (error) {
+        errors.push({
+          classId,
+          className: classInfo?.name || "Desconocida",
+          error: error instanceof Error ? error.message : "Error desconocido",
+        });
       }
     }
 
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
+      debug: {
+        currentTime,
+        currentDay: currentDayCapitalized,
+        totalClasses: classes.length,
+        classesEligibleForReset: classesToReset.length,
+        classesInfo: classesDebugInfo,
+      },
       totalClasses: classes.length,
       classesChecked: classes.length,
       classesReset: resetCount,
       resetDetails,
+      errors: errors.length > 0 ? errors : undefined,
       message: `${resetCount} clases reiniciadas de ${classesToReset.length} elegibles`,
     });
-  } catch {
+  } catch (error) {
     return NextResponse.json(
       {
         error: "Error en reinicio automático de clases",
+        details: error instanceof Error ? error.message : "Error desconocido",
         timestamp: new Date().toISOString(),
       },
       { status: 500 }

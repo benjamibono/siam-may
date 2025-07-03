@@ -119,7 +119,7 @@ export function getClassRestrictionMessage(
   paymentConcept: string | null
 ): string {
   if (!paymentConcept) {
-    return "No tienes pagos registrados para este mes.";
+    return "No tienes una cuota mensual válida. Necesitas pagar la cuota mensual correspondiente para acceder a las clases.";
   }
 
   switch (paymentConcept) {

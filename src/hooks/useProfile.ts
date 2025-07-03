@@ -50,6 +50,10 @@ export function useProfile() {
         setUser(null);
         setIsSuspended(false);
         setIsLoading(false);
+        // Clear pending toast flag on sign out
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("pendingToastShown");
+        }
       }
     });
 
@@ -89,14 +93,22 @@ export function useProfile() {
         return;
       }
 
-      // Mostrar mensaje informativo para cuentas pendientes
+      // Mostrar mensaje informativo para cuentas pendientes SOLO UNA VEZ por sesión
       if (data.status === "pending") {
-        toast.info(
-          "Cuenta pendiente de pago. Revisa las condiciones de inscripción.",
-          {
-            duration: 5000,
+        const toastKey = `pendingToastShown_${userId}`;
+        const hasShownToast = typeof window !== "undefined" && localStorage.getItem(toastKey);
+        
+        if (!hasShownToast) {
+          toast.info(
+            "Cuenta pendiente de pago. Revisa las condiciones de inscripción.",
+            {
+              duration: 5000,
+            }
+          );
+          if (typeof window !== "undefined") {
+            localStorage.setItem(toastKey, "true");
           }
-        );
+        }
       }
 
       setProfile(data);

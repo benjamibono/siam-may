@@ -28,10 +28,10 @@ interface AnnouncementWithProfile extends Tables<"announcements"> {
 // Función para obtener el icono apropiado según el tipo de clase
 const getClassIcon = (className: string, description?: string) => {
   // Primero verificar condiciones de descripción
-  if (description && description.toLowerCase().includes("bjj")) {
+  if (description && description.trim() !== '' && description.toLowerCase().includes("bjj")) {
     return { src: "/lock.png", alt: "BJJ" };
   }
-  if (description && description.toLowerCase().includes("sparring")) {
+  if (description && description.trim() !== '' && description.toLowerCase().includes("sparring")) {
     return { src: "/opponent.png", alt: "Sparring" };
   }
   // Luego verificar nombre de clase
@@ -139,6 +139,7 @@ export default function UserClassesPage() {
             return (
               classItem.name.toLowerCase().includes("niños") ||
               (classItem.description &&
+                classItem.description.trim() !== '' &&
                 classItem.description.toLowerCase().includes("niños"))
             );
           default:
@@ -307,7 +308,7 @@ export default function UserClassesPage() {
             </div>
           </div>
 
-          {cls.description && (
+          {cls.description && cls.description.trim() !== '' && (
             <div className="border-t pt-2">
               <button
                 onClick={() => toggleDescription(cls.id)}

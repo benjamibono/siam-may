@@ -85,26 +85,30 @@ export function AuthForm() {
 
         if (error) throw error;
 
-        // Si el usuario se creó exitosamente, actualizar el perfil
+        // Si el usuario se creó exitosamente, crear el perfil
         if (data.user) {
           const { error: profileError } = await supabase
             .from("profiles")
-            .update({
+            .upsert({
+              id: data.user.id,
+              email: data.user.email!,
               name: profileData.name,
               first_surname: profileData.first_surname,
               second_surname: profileData.second_surname,
               dni: profileData.dni,
               phone: profileData.phone,
+              role: "user",
               status: "pending",
+              created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
-            })
-            .eq("id", data.user.id);
+            });
 
           if (profileError) {
-            toast.error("Usuario creado pero error al actualizar perfil");
+            console.error("Error creating profile:", profileError);
+            toast.error("Usuario creado pero error al crear perfil. Contacta con el administrador.");
           } else {
-            // setShowWelcomeDialog(true); // Ya está abierto por defecto
-            // Reset form
+            toast.success("¡Cuenta creada exitosamente! Puedes iniciar sesión.");
+            // Reset form y cambiar a modo login
             setEmail("");
             setPassword("");
             setConfirmPassword("");
@@ -115,6 +119,7 @@ export function AuthForm() {
               dni: "",
               phone: "",
             });
+            setIsLogin(true); // Cambiar a modo login después del registro exitoso
           }
         }
       }

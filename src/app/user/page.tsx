@@ -107,6 +107,18 @@ export default function UserProfilePage() {
       });
 
       if (error) throw error;
+      
+      // También actualizar el email en la tabla profiles
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ email: emailData.email })
+        .eq("id", user.id);
+
+      if (profileError) {
+        console.error("Error updating profile email:", profileError);
+        // No mostramos error al usuario ya que el auth se actualizó correctamente
+      }
+
       toast.success("Email de verificación enviado a la nueva dirección");
       setIsEmailDialogOpen(false);
       setEmailData({ email: "" });

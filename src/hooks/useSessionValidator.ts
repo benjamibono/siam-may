@@ -22,8 +22,11 @@ export function useSessionValidator(user: any, intervalMs: number = 60000) { // 
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session?.access_token) {
+        console.log("No session or access token found");
         return;
       }
+
+      console.log("Validating session for user:", user.email);
 
       const response = await fetch("/api/auth/validate-session", {
         method: "GET",
@@ -33,6 +36,8 @@ export function useSessionValidator(user: any, intervalMs: number = 60000) { // 
       });
 
       const result: SessionValidationResponse = await response.json();
+
+      console.log("Session validation result:", result);
 
       if (!result.valid && result.shouldSignOut) {
         let message = "Tu sesión ha expirado.";

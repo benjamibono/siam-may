@@ -20,8 +20,24 @@ export function LogoutButton() {
         return;
       }
 
+      console.log("Attempting logout with session:", session.user?.email);
+
       const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      if (error) {
+        console.error("Logout error:", error);
+        // Si el error es 403, podría ser un problema de configuración de URLs
+        if (error.message.includes('403') || error.message.includes('Forbidden')) {
+          toast.error("Error de configuración. Cerrando sesión localmente...");
+          // Forzar logout local
+          if (typeof window !== "undefined") {
+            localStorage.clear();
+            sessionStorage.clear();
+          }
+          router.push("/");
+          return;
+        }
+        throw error;
+      }
 
       // Limpiar el localStorage/sessionStorage si es necesario
       if (typeof window !== "undefined") {
@@ -33,7 +49,8 @@ export function LogoutButton() {
 
       // Opcional: forzar recarga de la página
       router.push("/");
-    } catch {
+    } catch (error) {
+      console.error("Logout error:", error);
       toast.error("Error al cerrar sesión");
     }
   };

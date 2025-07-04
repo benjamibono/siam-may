@@ -153,6 +153,29 @@ export function AuthForm() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    try {
+      const targetEmail = email || window.prompt("Introduce tu email para restablecer la contraseña:") || "";
+      if (!targetEmail) return;
+
+      const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      toast.success(
+        "Hemos enviado un correo con las instrucciones para restablecer tu contraseña. Revisa tu bandeja de entrada y spam."
+      );
+    } catch (error: unknown) {
+      console.error("Forgot-password error:", error);
+      toast.error("No se pudo enviar el email de recuperación");
+    }
+  };
+
   return (
     <>
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -244,6 +267,7 @@ export function AuthForm() {
                     <button
                       type="button"
                       className="text-sm text-blue-600 hover:text-blue-800"
+                      onClick={handleForgotPassword}
                     >
                       ¿Olvidaste tu contraseña?
                     </button>

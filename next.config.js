@@ -9,15 +9,12 @@ const nextConfig = {
       },
     ];
   },
-  // Configuración actualizada para imágenes usando remotePatterns
+  // Asegurarnos de que las imágenes de Supabase estén permitidas
   images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '*.supabase.co',
-        port: '',
-        pathname: '/storage/v1/object/public/**',
-      },
+    domains: [
+      process.env.NEXT_PUBLIC_SUPABASE_URL?.replace("https://", "").split(
+        "."
+      )[0] + ".supabase.co",
     ],
   },
 };

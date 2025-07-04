@@ -62,12 +62,41 @@ Running a combat-sports academy is more than taking attendance – it's about **
 pnpm install     # fast dependency install
 pnpm dev         # next dev on http://localhost:3000
 ```
-1. Create a `.env.local` with your Supabase keys (see `.env.example`).
+1. Create a `.env.local` with your Supabase keys:
+   ```bash
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+   NEXT_PUBLIC_SITE_URL=https://your-domain.com
+   CRON_SECRET=your-super-secret-cron-token
+   ```
 2. Run **Reset Logic** test script to seed mock data:
    ```bash
    pnpm test:reset:dev
    ```
-3. Log in with the magic link provided in the terminal and explore!
+3. Test cron jobs locally:
+   ```bash
+   pnpm test:cron:all
+   ```
+4. Log in with the magic link provided in the terminal and explore!
+
+## 🔧 Troubleshooting
+
+### Common Issues After Domain Changes
+
+**1. User Registration 500 Error**
+- Check Supabase Dashboard → Authentication → URL Configuration
+- Update Site URL and Redirect URLs with your new domain
+- Verify environment variables in Vercel Dashboard
+
+**2. Cron Job Failures**
+- Update GitHub Secrets: `VERCEL_URL` and `CRON_SECRET`
+- Test locally: `pnpm test:cron reset-classes`
+- Check Vercel Function Logs for detailed errors
+
+**3. Authentication Callback Issues**
+- Ensure redirect URLs are configured in Supabase
+- Check that callback URL matches your domain
 
 ---
 

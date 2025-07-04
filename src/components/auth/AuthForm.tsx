@@ -83,32 +83,41 @@ export function AuthForm() {
           password,
         });
 
-        if (error) throw error;
+        if (error) {
+          // Manejar errores específicos de Supabase
+          if (error.message.includes("User already registered")) {
+            toast.error("Este email ya está registrado. Intenta iniciar sesión.");
+          } else if (error.message.includes("Password should be at least")) {
+            toast.error("La contraseña debe tener al menos 6 caracteres.");
+          } else if (error.message.includes("Invalid email")) {
+            toast.error("El formato del email no es válido.");
+          } else {
+            toast.error(`Error de registro: ${error.message}`);
+          }
+          return;
+        }
 
-        // Si el usuario se creó exitosamente, crear el perfil
+        // Si el usuario se creó exitosamente, actualizar el perfil
         if (data.user) {
           const { error: profileError } = await supabase
             .from("profiles")
-            .upsert({
-              id: data.user.id,
-              email: data.user.email!,
+            .update({
               name: profileData.name,
               first_surname: profileData.first_surname,
               second_surname: profileData.second_surname,
               dni: profileData.dni,
               phone: profileData.phone,
-              role: "user",
               status: "pending",
-              created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
-            });
+            })
+            .eq("id", data.user.id);
 
           if (profileError) {
-            console.error("Error creating profile:", profileError);
-            toast.error("Usuario creado pero error al crear perfil. Contacta con el administrador.");
+            console.error("Profile update error:", profileError);
+            toast.error("Usuario creado pero error al actualizar perfil. Contacta al administrador.");
           } else {
-            toast.success("¡Cuenta creada exitosamente! Puedes iniciar sesión.");
-            // Reset form y cambiar a modo login
+            toast.success("¡Cuenta creada exitosamente! Revisa tu email para confirmar tu cuenta.");
+            // Reset form
             setEmail("");
             setPassword("");
             setConfirmPassword("");
@@ -119,8 +128,9 @@ export function AuthForm() {
               dni: "",
               phone: "",
             });
-            setIsLogin(true); // Cambiar a modo login después del registro exitoso
           }
+        } else {
+          toast.error("Error inesperado al crear la cuenta. Inténtalo de nuevo.");
         }
       }
     } catch (error: unknown) {

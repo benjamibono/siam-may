@@ -9,6 +9,8 @@
     "lint": "next lint",
     "test:reset": "node test-reset-logic.mjs",
     "test:reset:dev": "node test-reset-logic.mjs 3000",
+    "test:cron": "node test-cron.mjs",
+    "test:cron:all": "node test-cron.mjs 3000 all",
     "reset:classes": "curl -X GET 'http://localhost:3000/api/cron/reset-classes' -H 'Authorization: Bearer mi-secreto-super-seguro'"
   },
   "dependencies": {

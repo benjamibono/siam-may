@@ -81,6 +81,15 @@ export function AuthForm() {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            data: {
+              name: profileData.name,
+              first_surname: profileData.first_surname,
+              second_surname: profileData.second_surname,
+              dni: profileData.dni,
+              phone: profileData.phone,
+            },
+          },
         });
 
         if (error) {

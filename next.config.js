@@ -11,10 +11,11 @@ const nextConfig = {
   },
   // Asegurarnos de que las imágenes de Supabase estén permitidas
   images: {
-    domains: [
-      process.env.NEXT_PUBLIC_SUPABASE_URL?.replace("https://", "").split(
-        "."
-      )[0] + ".supabase.co",
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
+      },
     ],
   },
 };

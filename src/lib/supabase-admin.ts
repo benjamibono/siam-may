@@ -3,8 +3,10 @@ import type { Database } from "./supabase";
 
 // Cliente administrativo que bypassa RLS
 // ⚠️ SOLO usar en el servidor/backend, NUNCA en el frontend
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!; // Esta key bypassa RLS
+const supabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
+const supabaseServiceKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY || "placeholder"; // Esta key bypassa RLS
 
 export const supabaseAdmin = createClient<Database>(
   supabaseUrl,

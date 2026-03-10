@@ -16,7 +16,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <HydrationBoundary>
+      <HydrationBoundary state={undefined}>
         <SessionValidator />
         {children}
       </HydrationBoundary>

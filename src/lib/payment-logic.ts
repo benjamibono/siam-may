@@ -163,7 +163,7 @@ export function getNewUserStatus(
   hasCurrentMonthPayment: boolean,
   role: string = "user",
   hasMedicalInsurance: boolean = false
-): string {
+): "active" | "suspended" | "pending" {
   // Admins and staff are always active and exempt from payment status changes
   if (role === "admin" || role === "staff") {
     return "active";

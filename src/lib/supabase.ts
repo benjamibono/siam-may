@@ -31,6 +31,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       profiles: {
         Row: {
@@ -87,6 +88,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       classes: {
         Row: {
@@ -116,6 +118,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       class_enrollments: {
         Row: {
@@ -136,6 +139,7 @@ export type Database = {
           class_id?: string;
           enrolled_at?: string;
         };
+        Relationships: [];
       };
       payments: {
         Row: {
@@ -174,6 +178,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
     };
     Views: {
